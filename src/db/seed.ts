@@ -112,13 +112,23 @@ async function main() {
     if (existingUsers.length > 0) {
       console.log("Tabel users sudah berisi data. Seeding users dilewati.");
     } else {
+      const adminNama = process.env.SEED_ADMIN_NAME?.trim();
+      const adminUsername = process.env.SEED_ADMIN_USERNAME?.trim().toLowerCase();
+      const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+      if (!adminNama || !adminUsername || !adminPassword) {
+        throw new Error(
+          "Variabel SEED_ADMIN_NAME, SEED_ADMIN_USERNAME, dan SEED_ADMIN_PASSWORD wajib diatur di file .env"
+        );
+      }
+
       console.log("Mengisi data awal akun user & admin ke Turso...");
 
       await db.insert(users).values([
         {
-          nama: "Pengurus RT 05 (Admin)",
-          username: "admin",
-          passwordHash: hashPassword("admin123"),
+          nama: adminNama,
+          username: adminUsername,
+          passwordHash: hashPassword(adminPassword),
           role: "admin",
         },
         {
@@ -129,7 +139,7 @@ async function main() {
         },
       ]);
 
-      console.log("Berhasil mengisi 2 akun awal (admin & user) ke Turso!");
+      console.log("Berhasil mengisi 2 akun awal (admin dari .env & user) ke Turso!");
     }
   } finally {
     // Selalu tutup koneksi dengan rapi
