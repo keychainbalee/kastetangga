@@ -44,7 +44,7 @@ export default function EchartsPieChart({ data }: PieChartProps) {
         textStyle: { color: "#334155", fontSize: 11, fontWeight: "500" },
         formatter: (name: string) => {
           const item = data.find((d) => d.label === name);
-          if (!item) return name;
+          if (!item || total === 0) return name;
           const pct = ((item.nominal / total) * 100).toFixed(0);
           return `${name}: Rp ${formatJuta(item.nominal)} (${pct}%)`;
         },

@@ -1,18 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+interface NavbarUser {
+  id: number;
+  username: string;
+  nama: string;
+  role: "admin" | "user";
+}
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [sessionUser, setSessionUser] = useState<NavbarUser | null>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { user: null }))
+      .then((data: { user?: NavbarUser | null }) => {
+        if (active) setSessionUser(data.user ?? null);
+      })
+      .catch(() => {
+        if (active) setSessionUser(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
 
   const navLinks = [
     { name: "Beranda", href: "/" },
     { name: "Transparansi Kas", href: "/kas" },
     { name: "Tentang RT", href: "/tentang" },
   ];
+
+  const authLink =
+    sessionUser?.role === "admin"
+      ? { name: "Dashboard Admin", href: "/admin" }
+      : sessionUser?.role === "user"
+        ? { name: `Akun (${sessionUser.username})`, href: "/login" }
+        : { name: "Login Admin", href: "/login" };
 
   return (
     <header className="sticky top-0 z-50 bg-sky-500 text-white shadow-sm border-b border-sky-400">
@@ -48,6 +78,16 @@ export default function Navbar() {
               </Link>
             );
           })}
+          <Link
+            href={authLink.href}
+            className={`ml-1 px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-all duration-200 ${
+              pathname === authLink.href
+                ? "bg-white text-sky-700 border-white shadow-xs"
+                : "bg-sky-600 text-white border-sky-400 hover:bg-sky-700"
+            }`}
+          >
+            {authLink.name}
+          </Link>
         </nav>
 
         {/* Tombol Hamburger */}
@@ -88,6 +128,17 @@ export default function Navbar() {
               </Link>
             );
           })}
+          <Link
+            href={authLink.href}
+            onClick={() => setIsOpen(false)}
+            className={`block px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              pathname === authLink.href
+                ? "bg-white text-sky-700 font-bold shadow-xs"
+                : "bg-sky-600 text-white hover:bg-sky-700"
+            }`}
+          >
+            {authLink.name}
+          </Link>
         </div>
       )}
     </header>

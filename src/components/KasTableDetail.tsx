@@ -2,7 +2,19 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 
-export default function KasTableDetail() {
+export interface TransaksiItem {
+  id: number;
+  date: string;
+  tanggalText: string;
+  tipe: "masuk" | "keluar";
+  kategori: string;
+  uraian: string;
+  nominal: number;
+  saldo: number;
+}
+
+export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem[] }) {
+  
   // State Filter
   const [selectedDate, setSelectedDate] = useState<string>(""); // Format YYYY-MM-DD
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -30,20 +42,6 @@ export default function KasTableDetail() {
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
 
-  // Database Transaksi Kas RT
-  const masterTransaksi = [
-    { id: 1, date: "2026-11-05", tanggalText: "05 Nov 2026", tipe: "masuk", kategori: "Iuran Bulanan", uraian: "Iuran Rutin Warga Blok A & B (24 KK)", nominal: 1200000, saldo: 14850000 },
-    { id: 2, date: "2026-11-03", tanggalText: "03 Nov 2026", tipe: "keluar", kategori: "Operasional", uraian: "Honor Petugas Sampah & Kebersihan Lingkungan", nominal: 800000, saldo: 13650000 },
-    { id: 3, date: "2026-11-01", tanggalText: "01 Nov 2026", tipe: "masuk", kategori: "Iuran Bulanan", uraian: "Iuran Rutin Warga Blok C & D (20 KK)", nominal: 1000000, saldo: 14450000 },
-    { id: 4, date: "2026-10-28", tanggalText: "28 Okt 2026", tipe: "keluar", kategori: "Pemeliharaan", uraian: "Penggantian Lampu Penerangan Jalan (3 Titik)", nominal: 350000, saldo: 13450000 },
-    { id: 5, date: "2026-10-25", tanggalText: "25 Okt 2026", tipe: "keluar", kategori: "Sosial", uraian: "Santunan Duka Keluarga Alm. Bpk Hendra (Blok B)", nominal: 500000, saldo: 13800000 },
-    { id: 6, date: "2026-10-15", tanggalText: "15 Okt 2026", tipe: "masuk", kategori: "Iuran Bulanan", uraian: "Iuran Warga Blok E & F (20 KK)", nominal: 1000000, saldo: 14300000 },
-    { id: 7, date: "2026-10-10", tanggalText: "10 Okt 2026", tipe: "masuk", kategori: "Donasi", uraian: "Sumbangan Sukarela Warga untuk Kas Lapangan", nominal: 500000, saldo: 13300000 },
-    { id: 8, date: "2026-10-03", tanggalText: "03 Okt 2026", tipe: "keluar", kategori: "Operasional", uraian: "Honor Bulanan Petugas Kebersihan Sampah", nominal: 800000, saldo: 12800000 },
-    { id: 9, date: "2026-09-28", tanggalText: "28 Sep 2026", tipe: "keluar", kategori: "Keamanan", uraian: "Pembelian Senter & Rompi Petugas Pos Ronda", nominal: 450000, saldo: 13600000 },
-    { id: 10, date: "2026-09-12", tanggalText: "12 Sep 2026", tipe: "masuk", kategori: "Iuran Bulanan", uraian: "Iuran Warga Terpadu Periode September", nominal: 3200000, saldo: 14050000 },
-  ];
-
   const formatRupiah = (num: number) => {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(num);
   };
@@ -58,7 +56,7 @@ export default function KasTableDetail() {
 
   // Filter Data
   const transaksiFiltered = useMemo(() => {
-    return masterTransaksi.filter((item) => {
+    return transaksi.filter((item) => {
       if (filterTipe !== "semua" && item.tipe !== filterTipe) return false;
       if (selectedDate !== "" && item.date !== selectedDate) return false;
       if (searchQuery.trim() !== "") {
@@ -69,7 +67,7 @@ export default function KasTableDetail() {
       }
       return true;
     });
-  }, [selectedDate, searchQuery, filterTipe]);
+  }, [transaksi, selectedDate, searchQuery, filterTipe]);
 
   // Total Otomatis Berdasarkan Filter
   const totalMasuk = useMemo(() => {
@@ -273,10 +271,10 @@ export default function KasTableDetail() {
                 <button
                   type="button"
                   onClick={() => {
-                    // Hari ini (simulasi 05 Nov 2026)
-                    setViewYear(2026);
-                    setViewMonth(10);
-                    handlePilihTanggal(5);
+                    const now = new Date();
+                    setViewYear(now.getFullYear());
+                    setViewMonth(now.getMonth());
+                    handlePilihTanggal(now.getDate());
                   }}
                   className="text-sky-600 hover:text-sky-800 font-bold text-[11px]"
                 >

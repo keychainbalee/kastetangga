@@ -9,3 +9,14 @@ export const transaksiKas = sqliteTable("transaksi_kas", {
   nominal: integer("nominal").notNull(),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
 });
+
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nama: text("nama").notNull(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+});
+
+export type UserRole = "admin" | "user";
