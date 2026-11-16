@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { transaksiKas, users } from "./schema";
+import { kategoriKas, transaksiKas, users } from "./schema";
 import { hashPassword } from "../lib/password";
 
 // Muat variabel dari file .env
@@ -19,8 +19,9 @@ async function main() {
     const isReset = process.argv.includes("--reset");
 
     if (isReset) {
-      console.log("Menghapus data lama di tabel transaksi_kas dan users...");
+      console.log("Menghapus data lama di tabel transaksi_kas, kategori_kas, dan users...");
       await db.delete(transaksiKas);
+      await db.delete(kategoriKas);
       await db.delete(users);
     }
 
@@ -140,6 +141,29 @@ async function main() {
       ]);
 
       console.log("Berhasil mengisi 2 akun awal (admin dari .env & user) ke Turso!");
+    }
+
+    // 3. Seed tabel kategori_kas (dipisah antara kas masuk dan kas keluar)
+    const existingKategori = await db.select().from(kategoriKas).limit(1);
+    if (existingKategori.length > 0) {
+      console.log("Tabel kategori_kas sudah berisi data. Seeding kategori_kas dilewati.");
+    } else {
+      console.log("Mengisi data awal kategori kas (masuk & keluar) ke Turso...");
+
+      await db.insert(kategoriKas).values([
+        // Kategori Kas Masuk
+        { nama: "Iuran Bulanan", tipe: "masuk" },
+        { nama: "Donasi", tipe: "masuk" },
+        { nama: "Lainnya", tipe: "masuk" },
+        // Kategori Kas Keluar
+        { nama: "Operasional", tipe: "keluar" },
+        { nama: "Keamanan", tipe: "keluar" },
+        { nama: "Pemeliharaan", tipe: "keluar" },
+        { nama: "Sosial", tipe: "keluar" },
+        { nama: "Lainnya", tipe: "keluar" },
+      ]);
+
+      console.log("Berhasil mengisi data awal kategori_kas ke Turso!");
     }
   } finally {
     // Selalu tutup koneksi dengan rapi

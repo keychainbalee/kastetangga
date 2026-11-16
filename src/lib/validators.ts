@@ -45,3 +45,33 @@ export function validateTransaksiInput(body: Record<string, unknown>): {
     },
   };
 }
+
+export interface KategoriPayload {
+  nama: string;
+  tipe: "masuk" | "keluar";
+}
+
+/**
+ * Memvalidasi input kategori kas (nama & tipe arus kas).
+ */
+export function validateKategoriInput(body: Record<string, unknown>): {
+  data?: KategoriPayload;
+  error?: string;
+} {
+  const nama = typeof body.nama === "string" ? body.nama.trim() : "";
+  const tipe = body.tipe;
+
+  if (!nama || nama.length < 2 || nama.length > 50) {
+    return { error: "Nama kategori harus 2-50 karakter." };
+  }
+  if (tipe !== "masuk" && tipe !== "keluar") {
+    return { error: "Tipe kategori harus 'masuk' atau 'keluar'." };
+  }
+
+  return {
+    data: {
+      nama,
+      tipe,
+    },
+  };
+}

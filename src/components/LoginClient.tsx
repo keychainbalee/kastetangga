@@ -185,24 +185,6 @@ export default function LoginClient({
             {loading ? "Memverifikasi..." : "Masuk"}
           </button>
         </form>
-
-        {/* Info Login & Uji Akses Role User */}
-        <div className="bg-sky-50 border border-sky-100 rounded-xl p-3.5 space-y-2">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-sky-800">
-            Catatan Akses
-          </p>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Gunakan akun admin yang terdaftar di database (dikonfigurasi melalui <code className="font-mono bg-white px-1 py-0.5 rounded border border-sky-200">.env</code>).
-          </p>
-          <button
-            type="button"
-            onClick={() => isiAkunDemo("warga", "warga123")}
-            className="w-full p-2 rounded-lg bg-white hover:bg-sky-100/70 border border-sky-200 text-left transition-colors text-xs"
-          >
-            <span className="font-bold text-slate-700 block">Uji Role: user (Warga)</span>
-            <span className="text-slate-500 font-mono text-[11px]">warga / warga123 — akan ditolak masuk dashboard</span>
-          </button>
-        </div>
       </div>
     </div>
   );

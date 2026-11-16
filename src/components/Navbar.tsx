@@ -15,8 +15,10 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [sessionUser, setSessionUser] = useState<NavbarUser | null>(null);
   const pathname = usePathname();
+  const isAdminRoute = pathname.startsWith("/admin");
 
   useEffect(() => {
+    if (pathname.startsWith("/admin")) return;
     let active = true;
     fetch("/api/auth/me", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : { user: null }))
@@ -30,6 +32,10 @@ export default function Navbar() {
       active = false;
     };
   }, [pathname]);
+
+  if (isAdminRoute) {
+    return null;
+  }
 
   const navLinks = [
     { name: "Beranda", href: "/" },
