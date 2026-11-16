@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { kategoriKas, transaksiKas, users } from "./schema";
+import { kategoriKas, kepalaKeluarga, transaksiKas, users } from "./schema";
 import { hashPassword } from "../lib/password";
 
 // Muat variabel dari file .env
@@ -19,9 +19,10 @@ async function main() {
     const isReset = process.argv.includes("--reset");
 
     if (isReset) {
-      console.log("Menghapus data lama di tabel transaksi_kas, kategori_kas, dan users...");
+      console.log("Menghapus data lama di tabel transaksi_kas, kategori_kas, kepala_keluarga, dan users...");
       await db.delete(transaksiKas);
       await db.delete(kategoriKas);
+      await db.delete(kepalaKeluarga);
       await db.delete(users);
     }
 
@@ -164,6 +165,24 @@ async function main() {
       ]);
 
       console.log("Berhasil mengisi data awal kategori_kas ke Turso!");
+    }
+
+    // 4. Seed tabel kepala_keluarga jika masih kosong
+    const existingKeluarga = await db.select().from(kepalaKeluarga).limit(1);
+    if (existingKeluarga.length > 0) {
+      console.log("Tabel kepala_keluarga sudah berisi data. Seeding kepala_keluarga dilewati.");
+    } else {
+      console.log("Mengisi data awal kepala keluarga ke Turso...");
+
+      await db.insert(kepalaKeluarga).values([
+        { namaKepalaKeluarga: "Bpk. Bambang Sutrisno", namaRumah: "Rumah No. 01", blok: "Blok A" },
+        { namaKepalaKeluarga: "Bpk. Rahmat Hidayat", namaRumah: "Rumah No. 05", blok: "Blok A" },
+        { namaKepalaKeluarga: "Ibu Siti Aminah", namaRumah: "Rumah No. 02", blok: "Blok B" },
+        { namaKepalaKeluarga: "Bpk. Joko Susilo", namaRumah: "Rumah No. 08", blok: "Blok C" },
+        { namaKepalaKeluarga: "Bpk. Dedi Kurniawan", namaRumah: "Rumah No. 12", blok: "Blok D" },
+      ]);
+
+      console.log("Berhasil mengisi data awal kepala_keluarga ke Turso!");
     }
   } finally {
     // Selalu tutup koneksi dengan rapi

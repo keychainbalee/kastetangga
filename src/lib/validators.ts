@@ -75,3 +75,43 @@ export function validateKategoriInput(body: Record<string, unknown>): {
     },
   };
 }
+
+export interface KepalaKeluargaPayload {
+  namaKepalaKeluarga: string;
+  namaRumah: string;
+  blok: string;
+}
+
+/**
+ * Memvalidasi input data kepala keluarga (nama kepala keluarga, nama rumah, dan blok).
+ */
+export function validateKepalaKeluargaInput(body: Record<string, unknown>): {
+  data?: KepalaKeluargaPayload;
+  error?: string;
+} {
+  const namaKepalaKeluarga =
+    typeof body.namaKepalaKeluarga === "string"
+      ? body.namaKepalaKeluarga.trim()
+      : "";
+  const namaRumah =
+    typeof body.namaRumah === "string" ? body.namaRumah.trim() : "";
+  const blok = typeof body.blok === "string" ? body.blok.trim() : "";
+
+  if (namaKepalaKeluarga.length < 2 || namaKepalaKeluarga.length > 100) {
+    return { error: "Nama kepala keluarga harus 2-100 karakter." };
+  }
+  if (namaRumah.length < 1 || namaRumah.length > 60) {
+    return { error: "Nama / nomor rumah harus 1-60 karakter." };
+  }
+  if (blok.length < 1 || blok.length > 30) {
+    return { error: "Blok rumah harus 1-30 karakter." };
+  }
+
+  return {
+    data: {
+      namaKepalaKeluarga,
+      namaRumah,
+      blok,
+    },
+  };
+}

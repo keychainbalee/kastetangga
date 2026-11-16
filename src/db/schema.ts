@@ -30,5 +30,13 @@ export const kategoriKas = sqliteTable(
   (table) => [uniqueIndex("kategori_nama_tipe_idx").on(table.nama, table.tipe)]
 );
 
+export const kepalaKeluarga = sqliteTable("kepala_keluarga", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  namaKepalaKeluarga: text("nama_kepala_keluarga").notNull(),
+  namaRumah: text("nama_rumah").notNull(),
+  blok: text("blok").notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+});
+
 export type UserRole = "admin" | "user";
 export type TransaksiTipe = "masuk" | "keluar";

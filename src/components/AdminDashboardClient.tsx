@@ -50,6 +50,13 @@ export interface AdminKategoriRow {
   tipe: TransaksiTipe;
 }
 
+export interface AdminKeluargaRow {
+  id: number;
+  namaKepalaKeluarga: string;
+  namaRumah: string;
+  blok: string;
+}
+
 function formatRupiah(num: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -71,14 +78,18 @@ export default function AdminDashboardClient({
   transaksiList,
   usersList,
   kategoriList,
+  keluargaList,
 }: {
   currentUser: SessionUser;
   transaksiList: AdminTransaksiRow[];
   usersList: AdminUserRow[];
   kategoriList: AdminKategoriRow[];
+  keluargaList: AdminKeluargaRow[];
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"transaksi" | "kategori" | "users">("transaksi");
+  const [activeTab, setActiveTab] = useState<
+    "transaksi" | "keluarga" | "kategori" | "users"
+  >("transaksi");
   const [alertState, setAlertState] = useState<AlertState | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -99,6 +110,16 @@ export default function AdminDashboardClient({
   const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<number | null>(null);
   const [isQuickKatOpen, setIsQuickKatOpen] = useState(false);
   const [quickKatNama, setQuickKatNama] = useState("");
+
+  // Modal & Filter Kepala Keluarga
+  const [searchKk, setSearchKk] = useState("");
+  const [filterBlok, setFilterBlok] = useState<string>("semua");
+  const [isKkModalOpen, setIsKkModalOpen] = useState(false);
+  const [editingKk, setEditingKk] = useState<AdminKeluargaRow | null>(null);
+  const [kkNama, setKkNama] = useState("");
+  const [kkRumah, setKkRumah] = useState("");
+  const [kkBlok, setKkBlok] = useState("Blok A");
+  const [confirmDeleteKkId, setConfirmDeleteKkId] = useState<number | null>(null);
 
   // Modal & Filter Kategori
   const [filterKatTipe, setFilterKatTipe] = useState<"semua" | "masuk" | "keluar">("semua");
@@ -153,6 +174,24 @@ export default function AdminDashboardClient({
     if (filterKatTipe === "semua") return kategoriList;
     return kategoriList.filter((k) => k.tipe === filterKatTipe);
   }, [kategoriList, filterKatTipe]);
+
+  const blokOptions = useMemo(() => {
+    const setBlok = new Set(keluargaList.map((k) => k.blok));
+    return Array.from(setBlok).sort((a, b) => a.localeCompare(b, "id"));
+  }, [keluargaList]);
+
+  const filteredKeluarga = useMemo(() => {
+    const q = searchKk.trim().toLowerCase();
+    return keluargaList.filter((item) => {
+      if (filterBlok !== "semua" && item.blok !== filterBlok) return false;
+      if (!q) return true;
+      return (
+        item.namaKepalaKeluarga.toLowerCase().includes(q) ||
+        item.namaRumah.toLowerCase().includes(q) ||
+        item.blok.toLowerCase().includes(q)
+      );
+    });
+  }, [keluargaList, searchKk, filterBlok]);
 
   const showAlert = useCallback(
     (
@@ -349,6 +388,106 @@ export default function AdminDashboardClient({
       router.refresh();
     } catch {
       showAlert("error", "Terjadi kesalahan jaringan saat menghapus kategori.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openTambahKk = () => {
+    setEditingKk(null);
+    setKkNama("");
+    setKkRumah("");
+    setKkBlok("Blok A");
+    clearAlert();
+    setIsKkModalOpen(true);
+  };
+
+  const openEditKk = (kk: AdminKeluargaRow) => {
+    setEditingKk(kk);
+    setKkNama(kk.namaKepalaKeluarga);
+    setKkRumah(kk.namaRumah);
+    setKkBlok(kk.blok);
+    clearAlert();
+    setIsKkModalOpen(true);
+  };
+
+  const handleSaveKk = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    clearAlert();
+
+    try {
+      const endpoint = editingKk
+        ? `/api/admin/keluarga/${editingKk.id}`
+        : "/api/admin/keluarga";
+      const method = editingKk ? "PATCH" : "POST";
+
+      const res = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          namaKepalaKeluarga: kkNama,
+          namaRumah: kkRumah,
+          blok: kkBlok,
+        }),
+      });
+
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        showAlert("error", data.error || "Gagal menyimpan data kepala keluarga.");
+        return;
+      }
+
+      const savedNama = kkNama.trim();
+      const savedRumah = kkRumah.trim();
+      const savedBlok = kkBlok.trim();
+      setIsKkModalOpen(false);
+      if (editingKk) {
+        showAlert(
+          "edit",
+          `Data kepala keluarga "${savedNama}" (${savedRumah}, ${savedBlok}) berhasil diperbarui.`
+        );
+      } else {
+        showAlert(
+          "add",
+          `Kepala keluarga "${savedNama}" (${savedRumah}, ${savedBlok}) berhasil ditambahkan.`
+        );
+      }
+      router.refresh();
+    } catch {
+      showAlert(
+        "error",
+        "Terjadi kesalahan jaringan saat menyimpan data kepala keluarga."
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteKk = async (id: number) => {
+    const targetKk = keluargaList.find((k) => k.id === id);
+    setBusy(true);
+    clearAlert();
+    try {
+      const res = await fetch(`/api/admin/keluarga/${id}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        showAlert("error", data.error || "Gagal menghapus data kepala keluarga.");
+        return;
+      }
+      setConfirmDeleteKkId(null);
+      showAlert(
+        "delete",
+        targetKk
+          ? `Data "${targetKk.namaKepalaKeluarga}" (${targetKk.namaRumah}, ${targetKk.blok}) telah dihapus.`
+          : "Data kepala keluarga berhasil dihapus."
+      );
+      router.refresh();
+    } catch {
+      showAlert(
+        "error",
+        "Terjadi kesalahan jaringan saat menghapus data kepala keluarga."
+      );
     } finally {
       setBusy(false);
     }
@@ -642,6 +781,18 @@ export default function AdminDashboardClient({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("keluarga")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+            activeTab === "keluarga"
+              ? "bg-sky-500 text-white shadow-xs"
+              : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
+          }`}
+        >
+          <Home className="w-4 h-4" />
+          Kepala Keluarga ({keluargaList.length})
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("kategori")}
           className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 ${
             activeTab === "kategori"
@@ -876,6 +1027,188 @@ export default function AdminDashboardClient({
                                 onClick={() => setConfirmDeleteTxId(tx.id)}
                                 className="p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
                                 title="Hapus transaksi"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: MANAJEMEN DATA KEPALA KELUARGA */}
+      {activeTab === "keluarga" && (
+        <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+            <div className="flex flex-col sm:flex-row gap-2.5 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchKk}
+                  onChange={(e) => setSearchKk(e.target.value)}
+                  placeholder="Cari nama KK, rumah, atau blok..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <select
+                aria-label="Filter blok rumah"
+                value={filterBlok}
+                onChange={(e) => setFilterBlok(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 focus:outline-hidden focus:border-sky-500"
+              >
+                <option value="semua">Semua Blok</option>
+                {blokOptions.map((blok) => (
+                  <option key={blok} value={blok}>
+                    {blok}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={openTambahKk}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Kepala Keluarga
+            </button>
+          </div>
+
+          {filteredKeluarga.length === 0 ? (
+            <div className="p-10 text-center text-sm text-slate-500">
+              Belum ada data kepala keluarga yang cocok dengan filter.
+            </div>
+          ) : (
+            <>
+              {/* Tampilan Mobile */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {filteredKeluarga.map((kk) => (
+                  <div key={kk.id} className="p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">
+                          {kk.namaKepalaKeluarga}
+                        </p>
+                        <span className="text-xs text-slate-600 block mt-0.5">
+                          {kk.namaRumah}
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 text-xs font-bold">
+                        {kk.blok}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditKk(kk)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      {confirmDeleteKkId === kk.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteKk(kk.id)}
+                            disabled={busy}
+                            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
+                          >
+                            Ya, Hapus
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteKkId(null)}
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteKkId(kk.id)}
+                          className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tampilan Desktop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-sky-50/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                      <th className="py-3 px-4 font-bold">Nama Kepala Keluarga</th>
+                      <th className="py-3 px-4 font-bold">Nama / No. Rumah</th>
+                      <th className="py-3 px-4 font-bold">Blok</th>
+                      <th className="py-3 px-4 font-bold text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {filteredKeluarga.map((kk) => (
+                      <tr key={kk.id} className="hover:bg-sky-50/40 transition-colors">
+                        <td className="py-3.5 px-4 font-semibold text-slate-900">
+                          {kk.namaKepalaKeluarga}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-700">
+                          {kk.namaRumah}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 text-xs font-bold">
+                            {kk.blok}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEditKk(kk)}
+                              className="p-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                              title="Edit kepala keluarga"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {confirmDeleteKkId === kk.id ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteKk(kk.id)}
+                                  disabled={busy}
+                                  className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
+                                >
+                                  Hapus
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteKkId(null)}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteKkId(kk.id)}
+                                className="p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                                title="Hapus kepala keluarga"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -1364,6 +1697,111 @@ export default function AdminDashboardClient({
                     : editingKat
                       ? "Simpan Perubahan"
                       : "Simpan Kategori"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TAMBAH / EDIT KEPALA KELUARGA */}
+      {isKkModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-extrabold text-slate-900">
+                {editingKk ? "Edit Data Kepala Keluarga" : "Tambah Kepala Keluarga"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsKkModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveKk} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-600">
+                  Nama Kepala Keluarga
+                </label>
+                <input
+                  type="text"
+                  value={kkNama}
+                  onChange={(e) => setKkNama(e.target.value)}
+                  placeholder="Contoh: Bpk. Budi Santoso"
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-600">
+                  Nama / Nomor Rumah
+                </label>
+                <input
+                  type="text"
+                  value={kkRumah}
+                  onChange={(e) => setKkRumah(e.target.value)}
+                  placeholder="Contoh: Rumah No. 01 / Griya Melati 1"
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-600">
+                  Blok Rumah
+                </label>
+                <input
+                  type="text"
+                  list="daftar-blok-rumah"
+                  value={kkBlok}
+                  onChange={(e) => setKkBlok(e.target.value)}
+                  placeholder="Contoh: Blok A"
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                />
+                <datalist id="daftar-blok-rumah">
+                  {Array.from(
+                    new Set([
+                      "Blok A",
+                      "Blok B",
+                      "Blok C",
+                      "Blok D",
+                      "Blok E",
+                      "Blok F",
+                      ...blokOptions,
+                    ])
+                  ).map((blok) => (
+                    <option key={blok} value={blok} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsKkModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className={`px-4 py-2 rounded-xl disabled:opacity-60 text-white text-sm font-semibold transition-colors ${
+                    editingKk
+                      ? "bg-amber-500 hover:bg-amber-600"
+                      : "bg-emerald-500 hover:bg-emerald-600"
+                  }`}
+                >
+                  {busy
+                    ? "Menyimpan..."
+                    : editingKk
+                      ? "Simpan Perubahan"
+                      : "Simpan Data KK"}
                 </button>
               </div>
             </form>

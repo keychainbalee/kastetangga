@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { kategoriKas, transaksiKas, users } from "@/db/schema";
+import { kategoriKas, kepalaKeluarga, transaksiKas, users } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import AdminAccessDenied from "@/components/AdminAccessDenied";
 import AdminDashboardClient from "@/components/AdminDashboardClient";
@@ -21,7 +21,7 @@ export default async function AdminPage() {
     return <AdminAccessDenied user={session} />;
   }
 
-  const [transaksiRows, userRows, kategoriRows] = await Promise.all([
+  const [transaksiRows, userRows, kategoriRows, keluargaRows] = await Promise.all([
     db
       .select({
         id: transaksiKas.id,
@@ -51,6 +51,19 @@ export default async function AdminPage() {
       })
       .from(kategoriKas)
       .orderBy(asc(kategoriKas.tipe), asc(kategoriKas.nama)),
+    db
+      .select({
+        id: kepalaKeluarga.id,
+        namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
+        namaRumah: kepalaKeluarga.namaRumah,
+        blok: kepalaKeluarga.blok,
+      })
+      .from(kepalaKeluarga)
+      .orderBy(
+        asc(kepalaKeluarga.blok),
+        asc(kepalaKeluarga.namaRumah),
+        asc(kepalaKeluarga.namaKepalaKeluarga)
+      ),
   ]);
 
   return (
@@ -59,6 +72,7 @@ export default async function AdminPage() {
       transaksiList={transaksiRows}
       usersList={userRows}
       kategoriList={kategoriRows}
+      keluargaList={keluargaRows}
     />
   );
 }
