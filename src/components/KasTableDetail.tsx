@@ -9,6 +9,7 @@ export interface TransaksiItem {
   tipe: "masuk" | "keluar";
   kategori: string;
   uraian: string;
+  kepalaKeluargaText?: string | null;
   nominal: number;
   saldo: number;
 }
@@ -63,7 +64,8 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
         const q = searchQuery.toLowerCase();
         const matchUraian = item.uraian.toLowerCase().includes(q);
         const matchKategori = item.kategori.toLowerCase().includes(q);
-        if (!matchUraian && !matchKategori) return false;
+        const matchKk = item.kepalaKeluargaText?.toLowerCase().includes(q) ?? false;
+        if (!matchUraian && !matchKategori && !matchKk) return false;
       }
       return true;
     });
@@ -364,7 +366,14 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
                     {item.kategori}
                   </span>
                 </div>
-                <div className="font-semibold text-slate-800 text-sm">{item.uraian}</div>
+                <div className="font-semibold text-slate-800 text-sm">
+                  {item.uraian}
+                  {item.kepalaKeluargaText && (
+                    <span className="block text-xs font-medium text-sky-700 mt-0.5">
+                      Dari: {item.kepalaKeluargaText}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                   <span className="text-slate-500">Nominal:</span>
                   <span className={`font-bold ${item.tipe === "masuk" ? "text-sky-600" : "text-rose-600"}`}>
@@ -403,7 +412,14 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
                         {item.kategori}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">{item.uraian}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {item.uraian}
+                      {item.kepalaKeluargaText && (
+                        <span className="block text-xs font-medium text-sky-700 mt-0.5">
+                          Dari: {item.kepalaKeluargaText}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right font-bold text-sky-600 whitespace-nowrap">
                       {item.tipe === "masuk" ? `+ ${formatRupiah(item.nominal)}` : "-"}
                     </td>

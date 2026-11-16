@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { transaksiKas } from "@/db/schema";
 import { requireAdminApi } from "@/lib/auth";
 import { validateTransaksiInput } from "@/lib/validators";
+import { verifyKepalaKeluargaExists } from "@/lib/kepala-keluarga";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -14,6 +15,16 @@ export async function POST(request: Request) {
     const validation = validateTransaksiInput(body);
     if (!validation.data) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const kkValid = await verifyKepalaKeluargaExists(
+      validation.data.kepalaKeluargaId
+    );
+    if (!kkValid) {
+      return NextResponse.json(
+        { error: "Data kepala keluarga yang dipilih tidak ditemukan." },
+        { status: 400 }
+      );
     }
 
     const [created] = await db

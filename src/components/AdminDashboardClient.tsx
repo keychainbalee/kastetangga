@@ -34,6 +34,7 @@ export interface AdminTransaksiRow {
   kategori: string;
   uraian: string;
   nominal: number;
+  kepalaKeluargaId: number | null;
 }
 
 export interface AdminUserRow {
@@ -107,6 +108,7 @@ export default function AdminDashboardClient({
   );
   const [txUraian, setTxUraian] = useState("");
   const [txNominal, setTxNominal] = useState("");
+  const [txKepalaKeluargaId, setTxKepalaKeluargaId] = useState<string>("");
   const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<number | null>(null);
   const [isQuickKatOpen, setIsQuickKatOpen] = useState(false);
   const [quickKatNama, setQuickKatNama] = useState("");
@@ -153,18 +155,29 @@ export default function AdminDashboardClient({
     };
   }, [transaksiList]);
 
+  const keluargaById = useMemo(() => {
+    return new Map(keluargaList.map((k) => [k.id, k]));
+  }, [keluargaList]);
+
   const filteredTransaksi = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return transaksiList.filter((item) => {
       if (filterTipe !== "semua" && item.tipe !== filterTipe) return false;
       if (!q) return true;
+      const kk =
+        item.kepalaKeluargaId !== null
+          ? keluargaById.get(item.kepalaKeluargaId)
+          : undefined;
       return (
         item.uraian.toLowerCase().includes(q) ||
         item.kategori.toLowerCase().includes(q) ||
-        item.tanggal.includes(q)
+        item.tanggal.includes(q) ||
+        Boolean(kk?.namaKepalaKeluarga.toLowerCase().includes(q)) ||
+        Boolean(kk?.namaRumah.toLowerCase().includes(q)) ||
+        Boolean(kk?.blok.toLowerCase().includes(q))
       );
     });
-  }, [transaksiList, searchQuery, filterTipe]);
+  }, [transaksiList, searchQuery, filterTipe, keluargaById]);
 
   const kategoriSesuaiTipe = useMemo(() => {
     return kategoriList.filter((k) => k.tipe === txTipe);
@@ -235,6 +248,7 @@ export default function AdminDashboardClient({
     setTxKategori(defaultKategori);
     setTxUraian("");
     setTxNominal("");
+    setTxKepalaKeluargaId("");
     setIsQuickKatOpen(false);
     setQuickKatNama("");
     clearAlert();
@@ -248,6 +262,9 @@ export default function AdminDashboardClient({
     setTxKategori(tx.kategori);
     setTxUraian(tx.uraian);
     setTxNominal(String(tx.nominal));
+    setTxKepalaKeluargaId(
+      tx.tipe === "masuk" && tx.kepalaKeluargaId ? String(tx.kepalaKeluargaId) : ""
+    );
     setIsQuickKatOpen(false);
     setQuickKatNama("");
     clearAlert();
@@ -256,6 +273,9 @@ export default function AdminDashboardClient({
 
   const handleChangeTxTipe = (newTipe: TransaksiTipe) => {
     setTxTipe(newTipe);
+    if (newTipe === "keluar") {
+      setTxKepalaKeluargaId("");
+    }
     const listBaru = kategoriList.filter((k) => k.tipe === newTipe);
     const masihCocok = listBaru.some((k) => k.nama === txKategori);
     if (!masihCocok) {
@@ -513,6 +533,10 @@ export default function AdminDashboardClient({
           kategori: txKategori,
           uraian: txUraian,
           nominal: Number(txNominal),
+          kepalaKeluargaId:
+            txTipe === "masuk" && txKepalaKeluargaId
+              ? Number(txKepalaKeluargaId)
+              : null,
         }),
       });
 
@@ -869,17 +893,27 @@ export default function AdminDashboardClient({
             <>
               {/* Tampilan Mobile */}
               <div className="divide-y divide-slate-100 md:hidden">
-                {filteredTransaksi.map((tx) => (
-                  <div key={tx.id} className="p-4 space-y-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-xs font-mono text-slate-500 block">
-                          {tx.tanggal}
-                        </span>
-                        <p className="text-sm font-bold text-slate-900 mt-0.5">
-                          {tx.uraian}
-                        </p>
-                      </div>
+                {filteredTransaksi.map((tx) => {
+                  const kk =
+                    tx.tipe === "masuk" && tx.kepalaKeluargaId !== null
+                      ? keluargaById.get(tx.kepalaKeluargaId)
+                      : undefined;
+                  return (
+                    <div key={tx.id} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-mono text-slate-500 block">
+                            {tx.tanggal}
+                          </span>
+                          <p className="text-sm font-bold text-slate-900 mt-0.5">
+                            {tx.uraian}
+                          </p>
+                          {kk && (
+                            <span className="text-xs font-medium text-sky-700 block mt-0.5">
+                              Dari: {kk.namaKepalaKeluarga} ({kk.blok} • {kk.namaRumah})
+                            </span>
+                          )}
+                        </div>
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
                           tx.tipe === "masuk"
@@ -944,7 +978,8 @@ export default function AdminDashboardClient({
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Tampilan Desktop */}
@@ -961,7 +996,12 @@ export default function AdminDashboardClient({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
-                    {filteredTransaksi.map((tx) => (
+                    {filteredTransaksi.map((tx) => {
+                      const kk =
+                        tx.tipe === "masuk" && tx.kepalaKeluargaId !== null
+                          ? keluargaById.get(tx.kepalaKeluargaId)
+                          : undefined;
+                      return (
                       <tr key={tx.id} className="hover:bg-sky-50/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">
                           {tx.tanggal}
@@ -972,7 +1012,12 @@ export default function AdminDashboardClient({
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-slate-800 font-medium">
-                          {tx.uraian}
+                          <span>{tx.uraian}</span>
+                          {kk && (
+                            <span className="block text-xs font-medium text-sky-700 mt-0.5">
+                              Dari: {kk.namaKepalaKeluarga} ({kk.blok} • {kk.namaRumah})
+                            </span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
@@ -1034,7 +1079,8 @@ export default function AdminDashboardClient({
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1573,6 +1619,31 @@ export default function AdminDashboardClient({
                   </div>
                 )}
               </div>
+
+              {txTipe === "masuk" && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-600">
+                    Dari Kepala Keluarga (Opsional)
+                  </label>
+                  <select
+                    value={txKepalaKeluargaId}
+                    onChange={(e) => setTxKepalaKeluargaId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-hidden focus:border-sky-500"
+                  >
+                    <option value="">— Umum / Bukan per Kepala Keluarga —</option>
+                    {keluargaList.map((kk) => (
+                      <option key={kk.id} value={String(kk.id)}>
+                        {kk.namaKepalaKeluarga} — {kk.blok} ({kk.namaRumah})
+                      </option>
+                    ))}
+                  </select>
+                  {keluargaList.length === 0 && (
+                    <span className="text-[11px] text-amber-700 block">
+                      Belum ada data kepala keluarga. Tambahkan di tab Kepala Keluarga.
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-slate-600">

@@ -30,6 +30,7 @@ export default async function AdminPage() {
         kategori: transaksiKas.kategori,
         uraian: transaksiKas.uraian,
         nominal: transaksiKas.nominal,
+        kepalaKeluargaId: transaksiKas.kepalaKeluargaId,
       })
       .from(transaksiKas)
       .orderBy(desc(transaksiKas.tanggal), desc(transaksiKas.id)),

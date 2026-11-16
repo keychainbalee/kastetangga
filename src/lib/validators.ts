@@ -4,6 +4,7 @@ export interface TransaksiPayload {
   kategori: string;
   uraian: string;
   nominal: number;
+  kepalaKeluargaId: number | null;
 }
 
 /**
@@ -35,6 +36,20 @@ export function validateTransaksiInput(body: Record<string, unknown>): {
     return { error: "Nominal harus berupa angka bulat positif." };
   }
 
+  let kepalaKeluargaId: number | null = null;
+  if (
+    tipe === "masuk" &&
+    body.kepalaKeluargaId !== null &&
+    body.kepalaKeluargaId !== undefined &&
+    body.kepalaKeluargaId !== ""
+  ) {
+    const parsedKkId = Number(body.kepalaKeluargaId);
+    if (!Number.isInteger(parsedKkId) || parsedKkId <= 0) {
+      return { error: "Pilihan kepala keluarga tidak valid." };
+    }
+    kepalaKeluargaId = parsedKkId;
+  }
+
   return {
     data: {
       tanggal,
@@ -42,6 +57,7 @@ export function validateTransaksiInput(body: Record<string, unknown>): {
       kategori,
       uraian,
       nominal: nominalNum,
+      kepalaKeluargaId,
     },
   };
 }

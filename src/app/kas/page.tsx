@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { transaksiKas } from "@/db/schema";
-import { asc } from "drizzle-orm";
+import { kepalaKeluarga, transaksiKas } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 import KasCharts from "@/components/KasCharts";
 import KasTableDetail from "@/components/KasTableDetail";
 
@@ -19,13 +19,39 @@ function formatTanggalSingkat(dateStr: string) {
 }
 
 export default async function KasPage() {
-  let rows: (typeof transaksiKas.$inferSelect)[] = [];
+  interface KasQueryRow {
+    id: number;
+    tanggal: string;
+    tipe: "masuk" | "keluar";
+    kategori: string;
+    uraian: string;
+    nominal: number;
+    namaKepalaKeluarga: string | null;
+    namaRumah: string | null;
+    blok: string | null;
+  }
+
+  let rows: KasQueryRow[] = [];
   let dbErrorDetail: string | null = null;
 
   try {
     rows = await db
-      .select()
+      .select({
+        id: transaksiKas.id,
+        tanggal: transaksiKas.tanggal,
+        tipe: transaksiKas.tipe,
+        kategori: transaksiKas.kategori,
+        uraian: transaksiKas.uraian,
+        nominal: transaksiKas.nominal,
+        namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
+        namaRumah: kepalaKeluarga.namaRumah,
+        blok: kepalaKeluarga.blok,
+      })
       .from(transaksiKas)
+      .leftJoin(
+        kepalaKeluarga,
+        eq(transaksiKas.kepalaKeluargaId, kepalaKeluarga.id)
+      )
       .orderBy(asc(transaksiKas.tanggal), asc(transaksiKas.id));
   } catch (err) {
     console.error("Gagal mengambil data transaksi_kas di /kas:", err);
@@ -76,6 +102,10 @@ export default async function KasPage() {
   let runningSaldo = 0;
   const transaksiDenganSaldo = rows.map((row) => {
     runningSaldo += row.tipe === "masuk" ? row.nominal : -row.nominal;
+    const kepalaKeluargaText =
+      row.tipe === "masuk" && row.namaKepalaKeluarga
+        ? `${row.namaKepalaKeluarga} (${row.blok ?? ""}${row.namaRumah ? ` - ${row.namaRumah}` : ""})`
+        : null;
     return {
       id: row.id,
       date: row.tanggal,
@@ -83,6 +113,7 @@ export default async function KasPage() {
       tipe: row.tipe,
       kategori: row.kategori,
       uraian: row.uraian,
+      kepalaKeluargaText,
       nominal: row.nominal,
       saldo: runningSaldo,
     };
