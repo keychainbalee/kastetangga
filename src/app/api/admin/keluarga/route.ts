@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { kepalaKeluarga } from "@/db/schema";
 import { requireAdminApi } from "@/lib/auth";
+import { getPengaturanIuran } from "@/lib/kepala-keluarga";
 import { validateKepalaKeluargaInput } from "@/lib/validators";
 
 export async function POST(request: Request) {
@@ -16,9 +17,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const pengaturan = await getPengaturanIuran();
+    const mulaiIuranBulan =
+      validation.data.mulaiIuranBulan ?? pengaturan.mulaiPeriodeBulan;
+
     const [created] = await db
       .insert(kepalaKeluarga)
-      .values(validation.data)
+      .values({
+        namaKepalaKeluarga: validation.data.namaKepalaKeluarga,
+        namaRumah: validation.data.namaRumah,
+        blok: validation.data.blok,
+        mulaiIuranBulan,
+      })
       .returning();
 
     revalidatePath("/admin");

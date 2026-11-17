@@ -5,9 +5,13 @@ import * as echarts from "echarts";
 
 interface BarChartProps {
   data: { bulan: string; masuk: number; keluar: number }[];
+  tahunAktif?: number;
 }
 
-export default function EchartsBarChart({ data }: BarChartProps) {
+export default function EchartsBarChart({
+  data,
+  tahunAktif = new Date().getFullYear(),
+}: BarChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,7 +33,7 @@ export default function EchartsBarChart({ data }: BarChartProps) {
         textStyle: { color: "#ffffff", fontSize: 12 },
         formatter: (params: any) => {
           const bulan = params[0].name;
-          return `<strong>${bulan} 2026</strong><br/>
+          return `<strong>${bulan} ${tahunAktif}</strong><br/>
                   <span style="color:#38bdf8">● Masuk:</span> Rp ${formatJt(params[0].value)}<br/>
                   <span style="color:#fb7185">● Keluar:</span> Rp ${formatJt(params[1].value)}`;
         },
@@ -85,12 +89,20 @@ export default function EchartsBarChart({ data }: BarChartProps) {
 
     const handleResize = () => chartInstance.resize();
     window.addEventListener("resize", handleResize);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(handleResize)
+        : null;
+    if (resizeObserver && chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
 
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", handleResize);
       chartInstance.dispose();
     };
-  }, [data]);
+  }, [data, tahunAktif]);
 
-  return <div ref={chartRef} className="w-full h-72 sm:h-80" />;
+  return <div ref={chartRef} className="w-full h-64 sm:h-72 md:h-80" />;
 }

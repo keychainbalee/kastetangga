@@ -89,12 +89,20 @@ export default function EchartsPieChart({ data }: PieChartProps) {
 
     const handleResize = () => chartInstance.resize();
     window.addEventListener("resize", handleResize);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(handleResize)
+        : null;
+    if (resizeObserver && chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
 
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", handleResize);
       chartInstance.dispose();
     };
   }, [data]);
 
-  return <div ref={chartRef} className="w-full h-72 sm:h-80" />;
+  return <div ref={chartRef} className="w-full h-64 sm:h-72 md:h-80" />;
 }

@@ -1,8 +1,15 @@
 import { redirect } from "next/navigation";
 import { asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { kategoriKas, kepalaKeluarga, transaksiKas, users } from "@/db/schema";
+import {
+  kategoriKas,
+  kepalaKeluarga,
+  pembayaranIuran,
+  transaksiKas,
+  users,
+} from "@/db/schema";
 import { getSession } from "@/lib/auth";
+import { getPengaturanIuran } from "@/lib/kepala-keluarga";
 import AdminAccessDenied from "@/components/AdminAccessDenied";
 import AdminDashboardClient from "@/components/AdminDashboardClient";
 
@@ -21,7 +28,14 @@ export default async function AdminPage() {
     return <AdminAccessDenied user={session} />;
   }
 
-  const [transaksiRows, userRows, kategoriRows, keluargaRows] = await Promise.all([
+  const [
+    transaksiRows,
+    userRows,
+    kategoriRows,
+    keluargaRows,
+    pembayaranRows,
+    pengaturanIuranData,
+  ] = await Promise.all([
     db
       .select({
         id: transaksiKas.id,
@@ -58,6 +72,7 @@ export default async function AdminPage() {
         namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
         namaRumah: kepalaKeluarga.namaRumah,
         blok: kepalaKeluarga.blok,
+        mulaiIuranBulan: kepalaKeluarga.mulaiIuranBulan,
       })
       .from(kepalaKeluarga)
       .orderBy(
@@ -65,6 +80,16 @@ export default async function AdminPage() {
         asc(kepalaKeluarga.namaRumah),
         asc(kepalaKeluarga.namaKepalaKeluarga)
       ),
+    db
+      .select({
+        id: pembayaranIuran.id,
+        transaksiId: pembayaranIuran.transaksiId,
+        kepalaKeluargaId: pembayaranIuran.kepalaKeluargaId,
+        bulan: pembayaranIuran.bulan,
+      })
+      .from(pembayaranIuran)
+      .orderBy(asc(pembayaranIuran.bulan)),
+    getPengaturanIuran(),
   ]);
 
   return (
@@ -74,6 +99,8 @@ export default async function AdminPage() {
       usersList={userRows}
       kategoriList={kategoriRows}
       keluargaList={keluargaRows}
+      pembayaranIuranList={pembayaranRows}
+      pengaturanIuran={pengaturanIuranData}
     />
   );
 }

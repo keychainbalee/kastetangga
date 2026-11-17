@@ -1,11 +1,14 @@
 import { sqliteTable, integer, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+const nowIso = () => new Date().toISOString();
+
 export const kepalaKeluarga = sqliteTable("kepala_keluarga", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   namaKepalaKeluarga: text("nama_kepala_keluarga").notNull(),
   namaRumah: text("nama_rumah").notNull(),
   blok: text("blok").notNull(),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+  mulaiIuranBulan: text("mulai_iuran_bulan").notNull().default("2026-09"),
+  createdAt: text("created_at").$defaultFn(nowIso),
 });
 
 export const transaksiKas = sqliteTable("transaksi_kas", {
@@ -19,7 +22,32 @@ export const transaksiKas = sqliteTable("transaksi_kas", {
     () => kepalaKeluarga.id,
     { onDelete: "set null" }
   ),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+  createdAt: text("created_at").$defaultFn(nowIso),
+});
+
+export const pembayaranIuran = sqliteTable(
+  "pembayaran_iuran",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transaksiId: integer("transaksi_id")
+      .notNull()
+      .references(() => transaksiKas.id, { onDelete: "cascade" }),
+    kepalaKeluargaId: integer("kepala_keluarga_id")
+      .notNull()
+      .references(() => kepalaKeluarga.id, { onDelete: "cascade" }),
+    bulan: text("bulan").notNull(), // Format: YYYY-MM (misal: "2026-11")
+    createdAt: text("created_at").$defaultFn(nowIso),
+  },
+  (table) => [
+    uniqueIndex("iuran_kk_bulan_idx").on(table.kepalaKeluargaId, table.bulan),
+  ]
+);
+
+export const pengaturanIuran = sqliteTable("pengaturan_iuran", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nominalPerBulan: integer("nominal_per_bulan").notNull().default(50000),
+  mulaiPeriodeBulan: text("mulai_periode_bulan").notNull().default("2026-09"),
+  updatedAt: text("updated_at").$defaultFn(nowIso),
 });
 
 export const users = sqliteTable("users", {
@@ -28,7 +56,7 @@ export const users = sqliteTable("users", {
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+  createdAt: text("created_at").$defaultFn(nowIso),
 });
 
 export const kategoriKas = sqliteTable(
@@ -37,7 +65,7 @@ export const kategoriKas = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     nama: text("nama").notNull(),
     tipe: text("tipe", { enum: ["masuk", "keluar"] }).notNull(),
-    createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").$defaultFn(nowIso),
   },
   (table) => [uniqueIndex("kategori_nama_tipe_idx").on(table.nama, table.tipe)]
 );

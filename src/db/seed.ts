@@ -1,7 +1,14 @@
 import * as dotenv from "dotenv";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { kategoriKas, kepalaKeluarga, transaksiKas, users } from "./schema";
+import {
+  kategoriKas,
+  kepalaKeluarga,
+  pembayaranIuran,
+  pengaturanIuran,
+  transaksiKas,
+  users,
+} from "./schema";
 import { hashPassword } from "../lib/password";
 
 // Muat variabel dari file .env
@@ -19,10 +26,14 @@ async function main() {
     const isReset = process.argv.includes("--reset");
 
     if (isReset) {
-      console.log("Menghapus data lama di tabel transaksi_kas, kategori_kas, kepala_keluarga, dan users...");
+      console.log(
+        "Menghapus data lama di tabel pembayaran_iuran, transaksi_kas, kategori_kas, kepala_keluarga, pengaturan_iuran, dan users..."
+      );
+      await db.delete(pembayaranIuran);
       await db.delete(transaksiKas);
       await db.delete(kategoriKas);
       await db.delete(kepalaKeluarga);
+      await db.delete(pengaturanIuran);
       await db.delete(users);
     }
 
@@ -175,14 +186,27 @@ async function main() {
       console.log("Mengisi data awal kepala keluarga ke Turso...");
 
       await db.insert(kepalaKeluarga).values([
-        { namaKepalaKeluarga: "Bpk. Bambang Sutrisno", namaRumah: "Rumah No. 01", blok: "Blok A" },
-        { namaKepalaKeluarga: "Bpk. Rahmat Hidayat", namaRumah: "Rumah No. 05", blok: "Blok A" },
-        { namaKepalaKeluarga: "Ibu Siti Aminah", namaRumah: "Rumah No. 02", blok: "Blok B" },
-        { namaKepalaKeluarga: "Bpk. Joko Susilo", namaRumah: "Rumah No. 08", blok: "Blok C" },
-        { namaKepalaKeluarga: "Bpk. Dedi Kurniawan", namaRumah: "Rumah No. 12", blok: "Blok D" },
+        { namaKepalaKeluarga: "Bpk. Bambang Sutrisno", namaRumah: "Rumah No. 01", blok: "Blok A", mulaiIuranBulan: "2026-09" },
+        { namaKepalaKeluarga: "Bpk. Rahmat Hidayat", namaRumah: "Rumah No. 05", blok: "Blok A", mulaiIuranBulan: "2026-09" },
+        { namaKepalaKeluarga: "Ibu Siti Aminah", namaRumah: "Rumah No. 02", blok: "Blok B", mulaiIuranBulan: "2026-09" },
+        { namaKepalaKeluarga: "Bpk. Joko Susilo", namaRumah: "Rumah No. 08", blok: "Blok C", mulaiIuranBulan: "2026-09" },
+        { namaKepalaKeluarga: "Bpk. Dedi Kurniawan", namaRumah: "Rumah No. 12", blok: "Blok D", mulaiIuranBulan: "2026-09" },
       ]);
 
       console.log("Berhasil mengisi data awal kepala_keluarga ke Turso!");
+    }
+
+    // 5. Seed pengaturan_iuran jika masih kosong
+    const existingPengaturan = await db.select().from(pengaturanIuran).limit(1);
+    if (existingPengaturan.length > 0) {
+      console.log("Tabel pengaturan_iuran sudah berisi data. Seeding dilewati.");
+    } else {
+      console.log("Mengisi pengaturan awal iuran kas RT ke Turso...");
+      await db.insert(pengaturanIuran).values({
+        nominalPerBulan: 50000,
+        mulaiPeriodeBulan: "2026-09",
+      });
+      console.log("Berhasil mengisi pengaturan_iuran ke Turso!");
     }
   } finally {
     // Selalu tutup koneksi dengan rapi

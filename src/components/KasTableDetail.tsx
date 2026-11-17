@@ -21,10 +21,10 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterTipe, setFilterTipe] = useState<"semua" | "masuk" | "keluar">("semua");
 
-  // State Kalender Popover
+  // State Kalender Popover (mengikuti tanggal sistem saat ini)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(2026);
-  const [viewMonth, setViewMonth] = useState(10); // 0-indexed: 10 = November
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // Menutup kalender jika klik di luar area
@@ -182,7 +182,7 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
 
           {/* POPOVER KALENDER INTERAKTIF (Terbuka saat tombol diklik) */}
           {isCalendarOpen && (
-            <div className="absolute top-full left-0 mt-2 z-50 bg-white border border-sky-200 rounded-2xl shadow-xl p-4 w-72 sm:w-80 animate-fade-in">
+            <div className="absolute top-full left-0 mt-2 z-50 bg-white border border-sky-200 rounded-2xl shadow-xl p-4 w-72 sm:w-80 max-w-[calc(100vw-2rem)] animate-fade-in">
               {/* Header Kalender: Navigasi Bulan & Tahun */}
               <div className="flex items-center justify-between pb-3 border-b border-sky-100">
                 <button
@@ -207,9 +207,14 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
                     onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
                     className="bg-sky-50/80 px-2 py-1 rounded-md border border-sky-200 cursor-pointer"
                   >
-                    <option value={2026}>2026</option>
-                    <option value={2025}>2025</option>
-                    <option value={2024}>2024</option>
+                    {Array.from(
+                      { length: 4 },
+                      (_, i) => new Date().getFullYear() + 1 - i
+                    ).map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <button
@@ -310,7 +315,7 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
       </div>
 
       {/* Tab Filter Tipe: Semua / Pemasukan / Pengeluaran */}
-      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
         <button
           onClick={() => setFilterTipe("semua")}
           className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${

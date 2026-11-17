@@ -19,9 +19,14 @@ export interface DataProporsiItem {
 interface KasChartsProps {
   dataBulanan: DataBulananItem[];
   dataProporsi: DataProporsiItem[];
+  tahunAktif?: number;
 }
 
-export default function KasCharts({ dataBulanan, dataProporsi }: KasChartsProps) {
+export default function KasCharts({
+  dataBulanan,
+  dataProporsi,
+  tahunAktif = new Date().getFullYear(),
+}: KasChartsProps) {
   const [chartType, setChartType] = useState<"bar" | "pie">("bar");
 
   return (
@@ -60,9 +65,9 @@ export default function KasCharts({ dataBulanan, dataProporsi }: KasChartsProps)
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs text-slate-500 px-1">
               <span>Perbandingan Kas Masuk vs Keluar per Bulan</span>
-              <span className="font-semibold text-sky-700">Tahun 2026</span>
+              <span className="font-semibold text-sky-700">Tahun {tahunAktif}</span>
             </div>
-            <EchartsBarChart data={dataBulanan} />
+            <EchartsBarChart data={dataBulanan} tahunAktif={tahunAktif} />
           </div>
         ) : (
           <div className="space-y-1">

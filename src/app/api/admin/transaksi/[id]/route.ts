@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { transaksiKas } from "@/db/schema";
+import { pembayaranIuran, transaksiKas } from "@/db/schema";
 import { requireAdminApi } from "@/lib/auth";
+import { formatBulanSingkat } from "@/lib/iuran";
+import {
+  findDuplicatePaidMonths,
+  verifyKepalaKeluargaExists,
+} from "@/lib/kepala-keluarga";
 import { validateTransaksiInput } from "@/lib/validators";
-import { verifyKepalaKeluargaExists } from "@/lib/kepala-keluarga";
 
 function parseId(rawId: string): number | null {
   const num = Number(rawId);
@@ -32,9 +36,10 @@ export async function PATCH(
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const kkValid = await verifyKepalaKeluargaExists(
-      validation.data.kepalaKeluargaId
-    );
+    const { tanggal, tipe, kategori, uraian, nominal, kepalaKeluargaId, bulanIuran } =
+      validation.data;
+
+    const kkValid = await verifyKepalaKeluargaExists(kepalaKeluargaId);
     if (!kkValid) {
       return NextResponse.json(
         { error: "Data kepala keluarga yang dipilih tidak ditemukan." },
@@ -42,11 +47,57 @@ export async function PATCH(
       );
     }
 
-    const [updated] = await db
-      .update(transaksiKas)
-      .set(validation.data)
-      .where(eq(transaksiKas.id, transaksiId))
-      .returning();
+    if (kepalaKeluargaId !== null && bulanIuran.length > 0) {
+      const duplicates = await findDuplicatePaidMonths(
+        kepalaKeluargaId,
+        bulanIuran,
+        transaksiId
+      );
+      if (duplicates.length > 0) {
+        const daftar = duplicates.map(formatBulanSingkat).join(", ");
+        return NextResponse.json(
+          {
+            error: `Bulan ${daftar} sudah tercatat lunas di transaksi lain untuk kepala keluarga ini.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const [updatedTx] = await tx
+        .update(transaksiKas)
+        .set({
+          tanggal,
+          tipe,
+          kategori,
+          uraian,
+          nominal,
+          kepalaKeluargaId,
+        })
+        .where(eq(transaksiKas.id, transaksiId))
+        .returning();
+
+      if (!updatedTx) {
+        return null;
+      }
+
+      await tx
+        .delete(pembayaranIuran)
+        .where(eq(pembayaranIuran.transaksiId, transaksiId));
+
+      if (kepalaKeluargaId !== null && bulanIuran.length > 0) {
+        await tx.insert(pembayaranIuran).values(
+          bulanIuran.map((bulan) => ({
+            transaksiId,
+            kepalaKeluargaId,
+            bulan,
+          }))
+        );
+      }
+
+      return updatedTx;
+    });
 
     if (!updated) {
       return NextResponse.json(

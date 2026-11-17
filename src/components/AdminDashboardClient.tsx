@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  CalendarClock,
   ExternalLink,
   Home,
   LogOut,
@@ -26,6 +27,16 @@ import AlertNotification, {
   type AlertActionType,
   type AlertState,
 } from "@/components/AlertNotification";
+import AdminIuranTab, {
+  type PembayaranIuranItem,
+} from "@/components/AdminIuranTab";
+import IuranBulanPicker from "@/components/IuranBulanPicker";
+import {
+  formatBulanSingkat,
+  getCurrentYearMonth,
+  hitungStatusIuranKeluarga,
+} from "@/lib/iuran";
+import SystemDateTimeBadge from "@/components/SystemDateTimeBadge";
 
 export interface AdminTransaksiRow {
   id: number;
@@ -56,6 +67,7 @@ export interface AdminKeluargaRow {
   namaKepalaKeluarga: string;
   namaRumah: string;
   blok: string;
+  mulaiIuranBulan: string;
 }
 
 function formatRupiah(num: number): string {
@@ -80,16 +92,20 @@ export default function AdminDashboardClient({
   usersList,
   kategoriList,
   keluargaList,
+  pembayaranIuranList,
+  pengaturanIuran,
 }: {
   currentUser: SessionUser;
   transaksiList: AdminTransaksiRow[];
   usersList: AdminUserRow[];
   kategoriList: AdminKategoriRow[];
   keluargaList: AdminKeluargaRow[];
+  pembayaranIuranList: PembayaranIuranItem[];
+  pengaturanIuran: { nominalPerBulan: number; mulaiPeriodeBulan: string };
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "transaksi" | "keluarga" | "kategori" | "users"
+    "transaksi" | "iuran" | "keluarga" | "kategori" | "users"
   >("transaksi");
   const [alertState, setAlertState] = useState<AlertState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -109,6 +125,8 @@ export default function AdminDashboardClient({
   const [txUraian, setTxUraian] = useState("");
   const [txNominal, setTxNominal] = useState("");
   const [txKepalaKeluargaId, setTxKepalaKeluargaId] = useState<string>("");
+  const [txCatatBulanIuran, setTxCatatBulanIuran] = useState(false);
+  const [txBulanIuran, setTxBulanIuran] = useState<string[]>([]);
   const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<number | null>(null);
   const [isQuickKatOpen, setIsQuickKatOpen] = useState(false);
   const [quickKatNama, setQuickKatNama] = useState("");
@@ -121,6 +139,7 @@ export default function AdminDashboardClient({
   const [kkNama, setKkNama] = useState("");
   const [kkRumah, setKkRumah] = useState("");
   const [kkBlok, setKkBlok] = useState("Blok A");
+  const [kkMulaiBulan, setKkMulaiBulan] = useState(pengaturanIuran.mulaiPeriodeBulan);
   const [confirmDeleteKkId, setConfirmDeleteKkId] = useState<number | null>(null);
 
   // Modal & Filter Kategori
@@ -206,6 +225,63 @@ export default function AdminDashboardClient({
     });
   }, [keluargaList, searchKk, filterBlok]);
 
+  const currentYm = useMemo(() => getCurrentYearMonth(), []);
+
+  const paidMonthsByTx = useMemo(() => {
+    const map = new Map<number, string[]>();
+    for (const item of pembayaranIuranList) {
+      const list = map.get(item.transaksiId);
+      if (list) {
+        list.push(item.bulan);
+      } else {
+        map.set(item.transaksiId, [item.bulan]);
+      }
+    }
+    for (const list of map.values()) {
+      list.sort();
+    }
+    return map;
+  }, [pembayaranIuranList]);
+
+  const tunggakanCount = useMemo(() => {
+    const paidByKk = new Map<number, Set<string>>();
+    for (const item of pembayaranIuranList) {
+      let set = paidByKk.get(item.kepalaKeluargaId);
+      if (!set) {
+        set = new Set<string>();
+        paidByKk.set(item.kepalaKeluargaId, set);
+      }
+      set.add(item.bulan);
+    }
+    let count = 0;
+    for (const kk of keluargaList) {
+      const info = hitungStatusIuranKeluarga(
+        kk.mulaiIuranBulan || pengaturanIuran.mulaiPeriodeBulan,
+        paidByKk.get(kk.id) ?? [],
+        currentYm,
+        pengaturanIuran.nominalPerBulan
+      );
+      if (info.status === "menunggak") count += 1;
+    }
+    return count;
+  }, [keluargaList, pembayaranIuranList, pengaturanIuran, currentYm]);
+
+  const alreadyPaidInOtherTx = useMemo(() => {
+    const set = new Set<string>();
+    const selectedKkId = Number(txKepalaKeluargaId);
+    if (!Number.isInteger(selectedKkId) || selectedKkId <= 0) return set;
+
+    for (const item of pembayaranIuranList) {
+      if (
+        item.kepalaKeluargaId === selectedKkId &&
+        item.transaksiId !== editingTx?.id
+      ) {
+        set.add(item.bulan);
+      }
+    }
+    return set;
+  }, [pembayaranIuranList, txKepalaKeluargaId, editingTx]);
+
   const showAlert = useCallback(
     (
       type: AlertActionType,
@@ -238,6 +314,22 @@ export default function AdminDashboardClient({
     }
   };
 
+  const syncNominalAndUraianForMonths = (
+    months: string[],
+    kkIdStr: string
+  ) => {
+    if (months.length > 0) {
+      setTxNominal(String(months.length * pengaturanIuran.nominalPerBulan));
+      const kk = kkIdStr ? keluargaById.get(Number(kkIdStr)) : undefined;
+      if (kk && (!txUraian.trim() || txUraian.startsWith("Iuran Kas "))) {
+        const daftarBulan = months.map(formatBulanSingkat).join(", ");
+        setTxUraian(
+          `Iuran Kas ${kk.namaKepalaKeluarga} (${months.length} Bulan: ${daftarBulan})`
+        );
+      }
+    }
+  };
+
   const openTambahTx = () => {
     const defaultTipe: TransaksiTipe = "masuk";
     const defaultKategori =
@@ -249,6 +341,8 @@ export default function AdminDashboardClient({
     setTxUraian("");
     setTxNominal("");
     setTxKepalaKeluargaId("");
+    setTxCatatBulanIuran(false);
+    setTxBulanIuran([]);
     setIsQuickKatOpen(false);
     setQuickKatNama("");
     clearAlert();
@@ -256,6 +350,7 @@ export default function AdminDashboardClient({
   };
 
   const openEditTx = (tx: AdminTransaksiRow) => {
+    const existingMonths = paidMonthsByTx.get(tx.id) ?? [];
     setEditingTx(tx);
     setTxTanggal(tx.tanggal);
     setTxTipe(tx.tipe);
@@ -265,6 +360,8 @@ export default function AdminDashboardClient({
     setTxKepalaKeluargaId(
       tx.tipe === "masuk" && tx.kepalaKeluargaId ? String(tx.kepalaKeluargaId) : ""
     );
+    setTxCatatBulanIuran(existingMonths.length > 0);
+    setTxBulanIuran(existingMonths);
     setIsQuickKatOpen(false);
     setQuickKatNama("");
     clearAlert();
@@ -275,11 +372,98 @@ export default function AdminDashboardClient({
     setTxTipe(newTipe);
     if (newTipe === "keluar") {
       setTxKepalaKeluargaId("");
+      setTxCatatBulanIuran(false);
+      setTxBulanIuran([]);
     }
     const listBaru = kategoriList.filter((k) => k.tipe === newTipe);
     const masihCocok = listBaru.some((k) => k.nama === txKategori);
     if (!masihCocok) {
       setTxKategori(listBaru[0]?.nama ?? "");
+    }
+  };
+
+  const handleChangeTxKategori = (kat: string) => {
+    setTxKategori(kat);
+    if (
+      txTipe === "masuk" &&
+      txKepalaKeluargaId !== "" &&
+      kat.toLowerCase().includes("iuran")
+    ) {
+      setTxCatatBulanIuran(true);
+    }
+  };
+
+  const handleChangeTxKepalaKeluarga = (kkIdStr: string) => {
+    setTxKepalaKeluargaId(kkIdStr);
+    setTxBulanIuran([]);
+    if (kkIdStr !== "" && txKategori.toLowerCase().includes("iuran")) {
+      setTxCatatBulanIuran(true);
+    } else if (kkIdStr === "") {
+      setTxCatatBulanIuran(false);
+    }
+  };
+
+  const handleChangeBulanIuran = (months: string[]) => {
+    setTxBulanIuran(months);
+    syncNominalAndUraianForMonths(months, txKepalaKeluargaId);
+  };
+
+  const handleBayarCepat = (kk: AdminKeluargaRow, defaultMonths: string[]) => {
+    const masukCats = kategoriList.filter((k) => k.tipe === "masuk");
+    const katIuran =
+      masukCats.find((k) => k.nama.toLowerCase().includes("iuran"))?.nama ??
+      masukCats[0]?.nama ??
+      "Iuran Bulanan";
+    const daftarBulan = defaultMonths.map(formatBulanSingkat).join(", ");
+
+    setEditingTx(null);
+    setTxTanggal(getTodayDateString());
+    setTxTipe("masuk");
+    setTxKategori(katIuran);
+    setTxKepalaKeluargaId(String(kk.id));
+    setTxCatatBulanIuran(true);
+    setTxBulanIuran(defaultMonths);
+    setTxNominal(
+      String(defaultMonths.length * pengaturanIuran.nominalPerBulan)
+    );
+    setTxUraian(
+      `Iuran Kas ${kk.namaKepalaKeluarga} (${defaultMonths.length} Bulan: ${daftarBulan})`
+    );
+    setIsQuickKatOpen(false);
+    setQuickKatNama("");
+    clearAlert();
+    setIsTxModalOpen(true);
+  };
+
+  const handleSavePengaturan = async (
+    nominalPerBulan: number,
+    mulaiPeriodeBulan: string
+  ) => {
+    setBusy(true);
+    clearAlert();
+    try {
+      const res = await fetch("/api/admin/pengaturan-iuran", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nominalPerBulan, mulaiPeriodeBulan }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        showAlert("error", data.error || "Gagal menyimpan pengaturan iuran.");
+        return;
+      }
+      showAlert(
+        "edit",
+        `Pengaturan iuran diperbarui: ${formatRupiah(nominalPerBulan)}/bulan mulai ${formatBulanSingkat(mulaiPeriodeBulan)}.`
+      );
+      router.refresh();
+    } catch {
+      showAlert(
+        "error",
+        "Terjadi kesalahan jaringan saat menyimpan pengaturan iuran."
+      );
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -418,6 +602,7 @@ export default function AdminDashboardClient({
     setKkNama("");
     setKkRumah("");
     setKkBlok("Blok A");
+    setKkMulaiBulan(pengaturanIuran.mulaiPeriodeBulan);
     clearAlert();
     setIsKkModalOpen(true);
   };
@@ -427,6 +612,7 @@ export default function AdminDashboardClient({
     setKkNama(kk.namaKepalaKeluarga);
     setKkRumah(kk.namaRumah);
     setKkBlok(kk.blok);
+    setKkMulaiBulan(kk.mulaiIuranBulan || pengaturanIuran.mulaiPeriodeBulan);
     clearAlert();
     setIsKkModalOpen(true);
   };
@@ -449,6 +635,7 @@ export default function AdminDashboardClient({
           namaKepalaKeluarga: kkNama,
           namaRumah: kkRumah,
           blok: kkBlok,
+          mulaiIuranBulan: kkMulaiBulan,
         }),
       });
 
@@ -515,6 +702,25 @@ export default function AdminDashboardClient({
 
   const handleSaveTx = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const bulanToSubmit =
+      txTipe === "masuk" && txKepalaKeluargaId && txCatatBulanIuran
+        ? txBulanIuran
+        : [];
+
+    if (
+      txTipe === "masuk" &&
+      txKepalaKeluargaId &&
+      txCatatBulanIuran &&
+      bulanToSubmit.length === 0
+    ) {
+      showAlert(
+        "error",
+        "Pilih minimal 1 bulan iuran atau matikan centang rincian bulan iuran."
+      );
+      return;
+    }
+
     setBusy(true);
     clearAlert();
 
@@ -537,6 +743,7 @@ export default function AdminDashboardClient({
             txTipe === "masuk" && txKepalaKeluargaId
               ? Number(txKepalaKeluargaId)
               : null,
+          bulanIuran: bulanToSubmit,
         }),
       });
 
@@ -699,10 +906,13 @@ export default function AdminDashboardClient({
       <AlertNotification alert={alertState} onClose={clearAlert} />
       {/* Header Dashboard */}
       <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="space-y-1">
-          <span className="text-xs text-slate-600 font-medium block">
-            Masuk sebagai <strong className="text-slate-900">{currentUser.nama}</strong>
-          </span>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-600 font-medium">
+              Masuk sebagai <strong className="text-slate-900">{currentUser.nama}</strong>
+            </span>
+            <SystemDateTimeBadge />
+          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
             Dashboard Admin RT 05
           </h1>
@@ -795,7 +1005,7 @@ export default function AdminDashboardClient({
         <button
           type="button"
           onClick={() => setActiveTab("transaksi")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${
             activeTab === "transaksi"
               ? "bg-sky-500 text-white shadow-xs"
               : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
@@ -805,38 +1015,61 @@ export default function AdminDashboardClient({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("iuran")}
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+            activeTab === "iuran"
+              ? "bg-sky-500 text-white shadow-xs"
+              : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
+          }`}
+        >
+          <CalendarClock className="w-4 h-4 shrink-0" />
+          <span>Status & Tunggakan Iuran</span>
+          {tunggakanCount > 0 && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "iuran"
+                  ? "bg-white text-red-600"
+                  : "bg-red-600 text-white"
+              }`}
+            >
+              {tunggakanCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("keluarga")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${
             activeTab === "keluarga"
               ? "bg-sky-500 text-white shadow-xs"
               : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
           }`}
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-4 h-4 shrink-0" />
           Kepala Keluarga ({keluargaList.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("kategori")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${
             activeTab === "kategori"
               ? "bg-sky-500 text-white shadow-xs"
               : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
           }`}
         >
-          <Tag className="w-4 h-4" />
+          <Tag className="w-4 h-4 shrink-0" />
           Kategori Kas ({kategoriList.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("users")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${
             activeTab === "users"
               ? "bg-sky-500 text-white shadow-xs"
               : "bg-white hover:bg-sky-50 text-slate-600 border border-slate-200"
           }`}
         >
-          <Shield className="w-4 h-4" />
+          <Shield className="w-4 h-4 shrink-0" />
           Pengguna & Role ({usersList.length})
         </button>
       </div>
@@ -898,6 +1131,7 @@ export default function AdminDashboardClient({
                     tx.tipe === "masuk" && tx.kepalaKeluargaId !== null
                       ? keluargaById.get(tx.kepalaKeluargaId)
                       : undefined;
+                  const paidMonths = paidMonthsByTx.get(tx.id) ?? [];
                   return (
                     <div key={tx.id} className="p-4 space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
@@ -911,6 +1145,12 @@ export default function AdminDashboardClient({
                           {kk && (
                             <span className="text-xs font-medium text-sky-700 block mt-0.5">
                               Dari: {kk.namaKepalaKeluarga} ({kk.blok} • {kk.namaRumah})
+                            </span>
+                          )}
+                          {paidMonths.length > 0 && (
+                            <span className="text-[11px] font-semibold text-emerald-700 block mt-0.5">
+                              Iuran ({paidMonths.length} bln):{" "}
+                              {paidMonths.map(formatBulanSingkat).join(", ")}
                             </span>
                           )}
                         </div>
@@ -1001,6 +1241,7 @@ export default function AdminDashboardClient({
                         tx.tipe === "masuk" && tx.kepalaKeluargaId !== null
                           ? keluargaById.get(tx.kepalaKeluargaId)
                           : undefined;
+                      const paidMonths = paidMonthsByTx.get(tx.id) ?? [];
                       return (
                       <tr key={tx.id} className="hover:bg-sky-50/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">
@@ -1016,6 +1257,12 @@ export default function AdminDashboardClient({
                           {kk && (
                             <span className="block text-xs font-medium text-sky-700 mt-0.5">
                               Dari: {kk.namaKepalaKeluarga} ({kk.blok} • {kk.namaRumah})
+                            </span>
+                          )}
+                          {paidMonths.length > 0 && (
+                            <span className="block text-[11px] font-semibold text-emerald-700 mt-0.5">
+                              Iuran ({paidMonths.length} bln):{" "}
+                              {paidMonths.map(formatBulanSingkat).join(", ")}
                             </span>
                           )}
                         </td>
@@ -1089,6 +1336,19 @@ export default function AdminDashboardClient({
         </div>
       )}
 
+      {/* TAB STATUS & TUNGGAKAN IURAN */}
+      {activeTab === "iuran" && (
+        <AdminIuranTab
+          keluargaList={keluargaList}
+          pembayaranIuranList={pembayaranIuranList}
+          pengaturanIuran={pengaturanIuran}
+          currentYm={currentYm}
+          busy={busy}
+          onSavePengaturan={handleSavePengaturan}
+          onBayarCepat={handleBayarCepat}
+        />
+      )}
+
       {/* TAB 2: MANAJEMEN DATA KEPALA KELUARGA */}
       {activeTab === "keluarga" && (
         <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden">
@@ -1146,7 +1406,8 @@ export default function AdminDashboardClient({
                           {kk.namaKepalaKeluarga}
                         </p>
                         <span className="text-xs text-slate-600 block mt-0.5">
-                          {kk.namaRumah}
+                          {kk.namaRumah} • Mulai:{" "}
+                          {formatBulanSingkat(kk.mulaiIuranBulan)}
                         </span>
                       </div>
                       <span className="px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 text-xs font-bold">
@@ -1204,6 +1465,7 @@ export default function AdminDashboardClient({
                       <th className="py-3 px-4 font-bold">Nama Kepala Keluarga</th>
                       <th className="py-3 px-4 font-bold">Nama / No. Rumah</th>
                       <th className="py-3 px-4 font-bold">Blok</th>
+                      <th className="py-3 px-4 font-bold">Mulai Iuran</th>
                       <th className="py-3 px-4 font-bold text-right">Aksi</th>
                     </tr>
                   </thead>
@@ -1220,6 +1482,9 @@ export default function AdminDashboardClient({
                           <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 text-xs font-bold">
                             {kk.blok}
                           </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-600 font-medium whitespace-nowrap">
+                          {formatBulanSingkat(kk.mulaiIuranBulan)}
                         </td>
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5">
@@ -1319,77 +1584,141 @@ export default function AdminDashboardClient({
               Belum ada kategori untuk filter ini.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-sky-50/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4 font-bold">Nama Kategori</th>
-                    <th className="py-3 px-4 font-bold">Tipe Arus Kas</th>
-                    <th className="py-3 px-4 font-bold text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredKategori.map((kat) => (
-                    <tr key={kat.id} className="hover:bg-sky-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-slate-900">
+            <>
+              {/* Tampilan Mobile */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {filteredKategori.map((kat) => (
+                  <div key={kat.id} className="p-4 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-900">
                         {kat.nama}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
-                            kat.tipe === "masuk"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          {kat.tipe === "masuk" ? "Kas Masuk" : "Kas Keluar"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
+                      </p>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
+                          kat.tipe === "masuk"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-700"
+                        }`}
+                      >
+                        {kat.tipe === "masuk" ? "Kas Masuk" : "Kas Keluar"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditKat(kat)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      {confirmDeleteKatId === kat.id ? (
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openEditKat(kat)}
-                            className="p-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
-                            title="Edit kategori"
+                            onClick={() => handleDeleteKat(kat.id)}
+                            disabled={busy}
+                            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
                           >
-                            <Pencil className="w-4 h-4" />
+                            Ya, Hapus
                           </button>
-                          {confirmDeleteKatId === kat.id ? (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteKat(kat.id)}
-                                disabled={busy}
-                                className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
-                              >
-                                Hapus
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteKatId(null)}
-                                className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold"
-                              >
-                                Batal
-                              </button>
-                            </div>
-                          ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteKatId(null)}
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteKatId(kat.id)}
+                          className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tampilan Tablet & Laptop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-sky-50/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                      <th className="py-3 px-4 font-bold">Nama Kategori</th>
+                      <th className="py-3 px-4 font-bold">Tipe Arus Kas</th>
+                      <th className="py-3 px-4 font-bold text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {filteredKategori.map((kat) => (
+                      <tr key={kat.id} className="hover:bg-sky-50/40 transition-colors">
+                        <td className="py-3.5 px-4 font-semibold text-slate-900">
+                          {kat.nama}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+                              kat.tipe === "masuk"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {kat.tipe === "masuk" ? "Kas Masuk" : "Kas Keluar"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setConfirmDeleteKatId(kat.id)}
-                              className="p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
-                              title="Hapus kategori"
+                              onClick={() => openEditKat(kat)}
+                              className="p-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                              title="Edit kategori"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Pencil className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                            {confirmDeleteKatId === kat.id ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteKat(kat.id)}
+                                  disabled={busy}
+                                  className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
+                                >
+                                  Hapus
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteKatId(null)}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteKatId(kat.id)}
+                                className="p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                                title="Hapus kategori"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -1420,7 +1749,88 @@ export default function AdminDashboardClient({
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Tampilan Mobile */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {usersList.map((u) => {
+              const isSelf = u.id === currentUser.userId;
+              return (
+                <div key={u.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {u.nama}
+                        {isSelf && (
+                          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-bold">
+                            Akun Anda
+                          </span>
+                        )}
+                      </p>
+                      <span className="text-xs font-mono text-slate-500 block mt-0.5">
+                        @{u.username}
+                      </span>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
+                        u.role === "admin"
+                          ? "bg-sky-100 text-sky-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {u.role}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <select
+                      aria-label={`Ubah role untuk ${u.username}`}
+                      value={u.role}
+                      disabled={isSelf || busy}
+                      onChange={(e) =>
+                        handleChangeRole(u.id, e.target.value as UserRole)
+                      }
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      <option value="admin">admin</option>
+                      <option value="user">user</option>
+                    </select>
+
+                    {!isSelf &&
+                      (confirmDeleteUserId === u.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(u.id)}
+                            disabled={busy}
+                            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
+                          >
+                            Ya, Hapus
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteUserId(null)}
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteUserId(u.id)}
+                          className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Hapus
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tampilan Tablet & Laptop */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-sky-50/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
@@ -1515,7 +1925,7 @@ export default function AdminDashboardClient({
       {/* MODAL TAMBAH / EDIT TRANSAKSI */}
       {isTxModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5 animate-fade-in">
+          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-xl space-y-5 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-slate-900">
                 {editingTx ? "Edit Transaksi Kas" : "Tambah Transaksi Kas"}
@@ -1530,7 +1940,7 @@ export default function AdminDashboardClient({
             </div>
 
             <form onSubmit={handleSaveTx} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-600">
                     Tanggal
@@ -1575,7 +1985,7 @@ export default function AdminDashboardClient({
                 </div>
                 <select
                   value={txKategori}
-                  onChange={(e) => setTxKategori(e.target.value)}
+                  onChange={(e) => handleChangeTxKategori(e.target.value)}
                   required
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-hidden focus:border-sky-500"
                 >
@@ -1621,26 +2031,65 @@ export default function AdminDashboardClient({
               </div>
 
               {txTipe === "masuk" && (
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600">
-                    Dari Kepala Keluarga (Opsional)
-                  </label>
-                  <select
-                    value={txKepalaKeluargaId}
-                    onChange={(e) => setTxKepalaKeluargaId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-hidden focus:border-sky-500"
-                  >
-                    <option value="">— Umum / Bukan per Kepala Keluarga —</option>
-                    {keluargaList.map((kk) => (
-                      <option key={kk.id} value={String(kk.id)}>
-                        {kk.namaKepalaKeluarga} — {kk.blok} ({kk.namaRumah})
-                      </option>
-                    ))}
-                  </select>
-                  {keluargaList.length === 0 && (
-                    <span className="text-[11px] text-amber-700 block">
-                      Belum ada data kepala keluarga. Tambahkan di tab Kepala Keluarga.
-                    </span>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-600">
+                      Dari Kepala Keluarga (Opsional)
+                    </label>
+                    <select
+                      value={txKepalaKeluargaId}
+                      onChange={(e) =>
+                        handleChangeTxKepalaKeluarga(e.target.value)
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-hidden focus:border-sky-500"
+                    >
+                      <option value="">— Umum / Bukan per Kepala Keluarga —</option>
+                      {keluargaList.map((kk) => (
+                        <option key={kk.id} value={String(kk.id)}>
+                          {kk.namaKepalaKeluarga} — {kk.blok} ({kk.namaRumah})
+                        </option>
+                      ))}
+                    </select>
+                    {keluargaList.length === 0 && (
+                      <span className="text-[11px] text-amber-700 block">
+                        Belum ada data kepala keluarga. Tambahkan di tab Kepala Keluarga.
+                      </span>
+                    )}
+                  </div>
+
+                  {txKepalaKeluargaId !== "" && (
+                    <div className="space-y-2.5">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={txCatatBulanIuran}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setTxCatatBulanIuran(checked);
+                            if (!checked) setTxBulanIuran([]);
+                          }}
+                          className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="text-xs font-bold text-slate-700">
+                          Catat Rincian Bulan Iuran (bisa bayar lebih dari 1 bulan)
+                        </span>
+                      </label>
+
+                      {txCatatBulanIuran && (
+                        <IuranBulanPicker
+                          mulaiIuranBulan={
+                            keluargaById.get(Number(txKepalaKeluargaId))
+                              ?.mulaiIuranBulan ??
+                            pengaturanIuran.mulaiPeriodeBulan
+                          }
+                          selectedMonths={txBulanIuran}
+                          alreadyPaidInOtherTx={alreadyPaidInOtherTx}
+                          tarifPerBulan={pengaturanIuran.nominalPerBulan}
+                          currentYm={currentYm}
+                          onChangeMonths={handleChangeBulanIuran}
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -1703,7 +2152,7 @@ export default function AdminDashboardClient({
       {/* MODAL TAMBAH / EDIT KATEGORI */}
       {isKatModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5 animate-fade-in">
+          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-xl space-y-5 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-slate-900">
                 {editingKat ? "Edit Kategori Kas" : "Tambah Kategori Kas"}
@@ -1778,7 +2227,7 @@ export default function AdminDashboardClient({
       {/* MODAL TAMBAH / EDIT KEPALA KELUARGA */}
       {isKkModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5 animate-fade-in">
+          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-xl space-y-5 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-slate-900">
                 {editingKk ? "Edit Data Kepala Keluarga" : "Tambah Kepala Keluarga"}
@@ -1851,6 +2300,22 @@ export default function AdminDashboardClient({
                 </datalist>
               </div>
 
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-600">
+                  Mulai Wajib Iuran (Bulan/Tahun)
+                </label>
+                <input
+                  type="month"
+                  value={kkMulaiBulan}
+                  onChange={(e) => setKkMulaiBulan(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                />
+                <span className="text-[11px] text-slate-500 block">
+                  Bulan sebelum tanggal ini tidak dihitung sebagai tunggakan.
+                </span>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -1883,7 +2348,7 @@ export default function AdminDashboardClient({
       {/* MODAL TAMBAH USER */}
       {isUserModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5 animate-fade-in">
+          <div className="bg-white border border-sky-200 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-xl space-y-5 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-slate-900">
                 Tambah Akun Pengguna

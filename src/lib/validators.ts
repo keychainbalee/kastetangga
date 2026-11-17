@@ -1,3 +1,5 @@
+import { isValidBulan } from "./iuran";
+
 export interface TransaksiPayload {
   tanggal: string;
   tipe: "masuk" | "keluar";
@@ -5,6 +7,7 @@ export interface TransaksiPayload {
   uraian: string;
   nominal: number;
   kepalaKeluargaId: number | null;
+  bulanIuran: string[];
 }
 
 /**
@@ -50,6 +53,25 @@ export function validateTransaksiInput(body: Record<string, unknown>): {
     kepalaKeluargaId = parsedKkId;
   }
 
+  let bulanIuran: string[] = [];
+  if (Array.isArray(body.bulanIuran) && body.bulanIuran.length > 0) {
+    if (tipe !== "masuk" || kepalaKeluargaId === null) {
+      return {
+        error:
+          "Pilih tipe Kas Masuk dan Kepala Keluarga untuk mencatat bulan iuran.",
+      };
+    }
+
+    const validMonths = new Set<string>();
+    for (const item of body.bulanIuran) {
+      if (typeof item !== "string" || !isValidBulan(item.trim())) {
+        return { error: "Format bulan iuran tidak valid (gunakan YYYY-MM)." };
+      }
+      validMonths.add(item.trim());
+    }
+    bulanIuran = Array.from(validMonths).sort();
+  }
+
   return {
     data: {
       tanggal,
@@ -58,6 +80,7 @@ export function validateTransaksiInput(body: Record<string, unknown>): {
       uraian,
       nominal: nominalNum,
       kepalaKeluargaId,
+      bulanIuran,
     },
   };
 }
@@ -96,10 +119,11 @@ export interface KepalaKeluargaPayload {
   namaKepalaKeluarga: string;
   namaRumah: string;
   blok: string;
+  mulaiIuranBulan?: string;
 }
 
 /**
- * Memvalidasi input data kepala keluarga (nama kepala keluarga, nama rumah, dan blok).
+ * Memvalidasi input data kepala keluarga (nama kepala keluarga, nama rumah, blok, dan bulan mulai iuran).
  */
 export function validateKepalaKeluargaInput(body: Record<string, unknown>): {
   data?: KepalaKeluargaPayload;
@@ -112,6 +136,10 @@ export function validateKepalaKeluargaInput(body: Record<string, unknown>): {
   const namaRumah =
     typeof body.namaRumah === "string" ? body.namaRumah.trim() : "";
   const blok = typeof body.blok === "string" ? body.blok.trim() : "";
+  const rawMulai =
+    typeof body.mulaiIuranBulan === "string"
+      ? body.mulaiIuranBulan.trim()
+      : "";
 
   if (namaKepalaKeluarga.length < 2 || namaKepalaKeluarga.length > 100) {
     return { error: "Nama kepala keluarga harus 2-100 karakter." };
@@ -122,12 +150,49 @@ export function validateKepalaKeluargaInput(body: Record<string, unknown>): {
   if (blok.length < 1 || blok.length > 30) {
     return { error: "Blok rumah harus 1-30 karakter." };
   }
+  if (rawMulai && !isValidBulan(rawMulai)) {
+    return { error: "Format bulan mulai iuran tidak valid (gunakan YYYY-MM)." };
+  }
 
   return {
     data: {
       namaKepalaKeluarga,
       namaRumah,
       blok,
+      ...(rawMulai ? { mulaiIuranBulan: rawMulai } : {}),
+    },
+  };
+}
+
+export interface PengaturanIuranPayload {
+  nominalPerBulan: number;
+  mulaiPeriodeBulan: string;
+}
+
+/**
+ * Memvalidasi input pengaturan tarif dan periode mulai iuran kas RT.
+ */
+export function validatePengaturanIuranInput(body: Record<string, unknown>): {
+  data?: PengaturanIuranPayload;
+  error?: string;
+} {
+  const nominalPerBulan = Number(body.nominalPerBulan);
+  const mulaiPeriodeBulan =
+    typeof body.mulaiPeriodeBulan === "string"
+      ? body.mulaiPeriodeBulan.trim()
+      : "";
+
+  if (!Number.isInteger(nominalPerBulan) || nominalPerBulan <= 0) {
+    return { error: "Nominal iuran per bulan harus angka bulat positif." };
+  }
+  if (!isValidBulan(mulaiPeriodeBulan)) {
+    return { error: "Format bulan mulai periode tidak valid (gunakan YYYY-MM)." };
+  }
+
+  return {
+    data: {
+      nominalPerBulan,
+      mulaiPeriodeBulan,
     },
   };
 }

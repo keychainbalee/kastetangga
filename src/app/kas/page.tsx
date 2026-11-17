@@ -4,6 +4,7 @@ import { kepalaKeluarga, transaksiKas } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import KasCharts from "@/components/KasCharts";
 import KasTableDetail from "@/components/KasTableDetail";
+import SystemDateTimeBadge from "@/components/SystemDateTimeBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -121,8 +122,9 @@ export default async function KasPage() {
 
   const transaksiTerbaru = [...transaksiDenganSaldo].reverse();
 
+  const tahunAktif = new Date().getFullYear();
   const dataBulanan = bulanSingkat.map((nama, idx) => {
-    const prefix = `2026-${String(idx + 1).padStart(2, "0")}`;
+    const prefix = `${tahunAktif}-${String(idx + 1).padStart(2, "0")}`;
     const transaksiBulan = rows.filter((r) => r.tanggal.startsWith(prefix));
     const masuk = transaksiBulan
       .filter((r) => r.tipe === "masuk")
@@ -154,11 +156,14 @@ export default async function KasPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8 animate-fade-in">
       {/* Header Halaman */}
-      <div>
-        <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900">Transparansi Kas RT</h1>
-        <p className="text-slate-500 text-xs sm:text-sm mt-1">
-          Laporan rekapitulasi arus kas masuk dan keluar warga RT 05 yang diperbarui berkala.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900">Transparansi Kas RT</h1>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">
+            Laporan rekapitulasi arus kas masuk dan keluar warga RT 05 yang diperbarui berkala.
+          </p>
+        </div>
+        <SystemDateTimeBadge />
       </div>
 
       {/* 1. Banner Saldo Kas Aktif */}
@@ -176,7 +181,11 @@ export default async function KasPage() {
       </div>
 
       {/* 2. Visualisasi Grafik (Pie Chart & Bar Chart) */}
-      <KasCharts dataBulanan={dataBulanan} dataProporsi={dataProporsi} />
+      <KasCharts
+        dataBulanan={dataBulanan}
+        dataProporsi={dataProporsi}
+        tahunAktif={tahunAktif}
+      />
 
       {/* 3. Komponen Tabel Detail dengan Ikon Kalender & Pencarian */}
       <KasTableDetail transaksi={transaksiTerbaru} />
