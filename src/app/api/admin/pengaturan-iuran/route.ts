@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { pengaturanIuran } from "@/db/schema";
@@ -42,6 +42,8 @@ export async function PATCH(request: Request) {
       saved = created;
     }
 
+    revalidateTag("kas-data", { expire: 0 });
+    revalidatePath("/kas");
     revalidatePath("/admin");
     return NextResponse.json({ data: saved });
   } catch (err) {

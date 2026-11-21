@@ -1,36 +1,74 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
-import { db } from "@/db";
-import { kepalaKeluarga, transaksiKas } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import KasCharts from "@/components/KasCharts";
-import KasTableDetail from "@/components/KasTableDetail";
+import { db } from "@/db";
+import { kepalaKeluarga, pembayaranIuran, transaksiKas } from "@/db/schema";
+import KasTransparansiClient from "@/components/KasTransparansiClient";
 import SystemDateTimeBadge from "@/components/SystemDateTimeBadge";
+import type {
+  KasBlokRekap,
+  KasIuranKeluargaItem,
+  KasIuranSummary,
+} from "@/components/kas/types";
+import { getCurrentYearMonth, hitungStatusIuranKeluarga } from "@/lib/iuran";
+import { getPengaturanIuran } from "@/lib/kepala-keluarga";
 
 export const revalidate = 300;
 
-const getCachedKasRows = unstable_cache(
+const getCachedKasPageData = unstable_cache(
   async () => {
-    return db
-      .select({
-        id: transaksiKas.id,
-        tanggal: transaksiKas.tanggal,
-        tipe: transaksiKas.tipe,
-        kategori: transaksiKas.kategori,
-        uraian: transaksiKas.uraian,
-        nominal: transaksiKas.nominal,
-        namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
-        namaRumah: kepalaKeluarga.namaRumah,
-        blok: kepalaKeluarga.blok,
-      })
-      .from(transaksiKas)
-      .leftJoin(
-        kepalaKeluarga,
-        eq(transaksiKas.kepalaKeluargaId, kepalaKeluarga.id)
-      )
-      .orderBy(asc(transaksiKas.tanggal), asc(transaksiKas.id));
+    const [transaksiRows, keluargaRows, pembayaranRows, pengaturanIuran] =
+      await Promise.all([
+        db
+          .select({
+            id: transaksiKas.id,
+            tanggal: transaksiKas.tanggal,
+            tipe: transaksiKas.tipe,
+            kategori: transaksiKas.kategori,
+            uraian: transaksiKas.uraian,
+            nominal: transaksiKas.nominal,
+            namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
+            namaRumah: kepalaKeluarga.namaRumah,
+            blok: kepalaKeluarga.blok,
+          })
+          .from(transaksiKas)
+          .leftJoin(
+            kepalaKeluarga,
+            eq(transaksiKas.kepalaKeluargaId, kepalaKeluarga.id)
+          )
+          .orderBy(asc(transaksiKas.tanggal), asc(transaksiKas.id)),
+        db
+          .select({
+            id: kepalaKeluarga.id,
+            namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
+            namaRumah: kepalaKeluarga.namaRumah,
+            blok: kepalaKeluarga.blok,
+            mulaiIuranBulan: kepalaKeluarga.mulaiIuranBulan,
+          })
+          .from(kepalaKeluarga)
+          .orderBy(
+            asc(kepalaKeluarga.blok),
+            asc(kepalaKeluarga.namaRumah),
+            asc(kepalaKeluarga.namaKepalaKeluarga)
+          ),
+        db
+          .select({
+            kepalaKeluargaId: pembayaranIuran.kepalaKeluargaId,
+            bulan: pembayaranIuran.bulan,
+          })
+          .from(pembayaranIuran)
+          .orderBy(asc(pembayaranIuran.bulan)),
+        getPengaturanIuran(),
+      ]);
+
+    return {
+      transaksiRows,
+      keluargaRows,
+      pembayaranRows,
+      pengaturanIuran,
+    };
   },
-  ["kas-public-transactions"],
+  ["kas-public-data"],
   {
     tags: ["kas-data"],
     revalidate: 300,
@@ -49,25 +87,14 @@ function formatTanggalSingkat(dateStr: string) {
 }
 
 export default async function KasPage() {
-  interface KasQueryRow {
-    id: number;
-    tanggal: string;
-    tipe: "masuk" | "keluar";
-    kategori: string;
-    uraian: string;
-    nominal: number;
-    namaKepalaKeluarga: string | null;
-    namaRumah: string | null;
-    blok: string | null;
-  }
-
-  let rows: KasQueryRow[] = [];
+  let cachedData: Awaited<ReturnType<typeof getCachedKasPageData>> | null =
+    null;
   let dbErrorDetail: string | null = null;
 
   try {
-    rows = await getCachedKasRows();
+    cachedData = await getCachedKasPageData();
   } catch (err) {
-    console.error("Gagal mengambil data transaksi_kas di /kas:", err);
+    console.error("Gagal mengambil data transparansi kas di /kas:", err);
     const cause =
       err instanceof Error && "cause" in err && err.cause instanceof Error
         ? err.cause.message
@@ -77,7 +104,7 @@ export default async function KasPage() {
     dbErrorDetail = cause;
   }
 
-  if (dbErrorDetail) {
+  if (dbErrorDetail || !cachedData) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 animate-fade-in">
         <div className="bg-white border border-rose-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
@@ -88,10 +115,16 @@ export default async function KasPage() {
             Terjadi kendala saat mengambil data dari database
           </h1>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Pastikan koneksi internet/Turso aktif, variabel <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">.env</code> sudah benar, dan skema tabel sudah diterapkan melalui <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">npx drizzle-kit push</code>.
+            Pastikan koneksi internet/Turso aktif, variabel{" "}
+            <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">.env</code>{" "}
+            sudah benar, dan skema tabel sudah diterapkan melalui{" "}
+            <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs">
+              npx drizzle-kit push
+            </code>
+            .
           </p>
           <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-mono text-rose-800 break-words">
-            Detail error: {dbErrorDetail}
+            Detail error: {dbErrorDetail ?? "Data kas tidak tersedia."}
           </div>
           <div className="pt-2 flex flex-wrap gap-2.5">
             <Link
@@ -112,9 +145,25 @@ export default async function KasPage() {
     );
   }
 
+  const {
+    transaksiRows: rows,
+    keluargaRows,
+    pembayaranRows,
+    pengaturanIuran,
+  } = cachedData;
+
   let runningSaldo = 0;
+  let totalMasuk = 0;
+  let totalKeluar = 0;
+
   const transaksiDenganSaldo = rows.map((row) => {
-    runningSaldo += row.tipe === "masuk" ? row.nominal : -row.nominal;
+    if (row.tipe === "masuk") {
+      runningSaldo += row.nominal;
+      totalMasuk += row.nominal;
+    } else {
+      runningSaldo -= row.nominal;
+      totalKeluar += row.nominal;
+    }
     const kepalaKeluargaText =
       row.tipe === "masuk" && row.namaKepalaKeluarga
         ? `${row.namaKepalaKeluarga} (${row.blok ?? ""}${row.namaRumah ? ` - ${row.namaRumah}` : ""})`
@@ -158,49 +207,135 @@ export default async function KasPage() {
     colorHex: warnaKategori[idx % warnaKategori.length],
   }));
 
-  const formatRupiah = (num: number) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(num);
+  // Hitung status iuran & tunggakan per KK dan rekap per Blok
+  const currentYm = getCurrentYearMonth();
+  const paidMonthsByKk = new Map<number, string[]>();
+  for (const pay of pembayaranRows) {
+    const list = paidMonthsByKk.get(pay.kepalaKeluargaId);
+    if (list) {
+      list.push(pay.bulan);
+    } else {
+      paidMonthsByKk.set(pay.kepalaKeluargaId, [pay.bulan]);
+    }
+  }
+
+  const statusIuranRaw: KasIuranKeluargaItem[] = keluargaRows.map((kk) => {
+    const mulaiBulan =
+      kk.mulaiIuranBulan || pengaturanIuran.mulaiPeriodeBulan;
+    const paidMonths = paidMonthsByKk.get(kk.id) ?? [];
+    const info = hitungStatusIuranKeluarga(
+      mulaiBulan,
+      paidMonths,
+      currentYm,
+      pengaturanIuran.nominalPerBulan
+    );
+    return {
+      id: kk.id,
+      namaKepalaKeluarga: kk.namaKepalaKeluarga,
+      namaRumah: kk.namaRumah,
+      blok: kk.blok,
+      mulaiIuranBulan: mulaiBulan,
+      status: info.status,
+      tunggakanBulan: info.tunggakanBulan,
+      bulanDiMuka: info.bulanDiMuka,
+      totalNominalTunggakan: info.totalNominalTunggakan,
+    };
+  });
+
+  // Prioritaskan KK yang memiliki tunggakan terbanyak di urutan paling atas
+  const statusIuranList = [...statusIuranRaw].sort((a, b) => {
+    const diffTunggakan = b.tunggakanBulan.length - a.tunggakanBulan.length;
+    if (diffTunggakan !== 0) return diffTunggakan;
+    const diffBlok = a.blok.localeCompare(b.blok, "id");
+    if (diffBlok !== 0) return diffBlok;
+    const diffRumah = a.namaRumah.localeCompare(b.namaRumah, "id");
+    if (diffRumah !== 0) return diffRumah;
+    return a.namaKepalaKeluarga.localeCompare(b.namaKepalaKeluarga, "id");
+  });
+
+  let totalKkMenunggak = 0;
+  let totalBulanTunggakan = 0;
+  let totalNominalTunggakan = 0;
+  const blokAccumulator = new Map<
+    string,
+    { totalKk: number; lunasKk: number; menunggakKk: number; totalNominalTunggakan: number }
+  >();
+
+  for (const item of statusIuranList) {
+    const entry = blokAccumulator.get(item.blok) ?? {
+      totalKk: 0,
+      lunasKk: 0,
+      menunggakKk: 0,
+      totalNominalTunggakan: 0,
+    };
+    entry.totalKk += 1;
+
+    if (item.status === "menunggak") {
+      totalKkMenunggak += 1;
+      totalBulanTunggakan += item.tunggakanBulan.length;
+      totalNominalTunggakan += item.totalNominalTunggakan;
+      entry.menunggakKk += 1;
+      entry.totalNominalTunggakan += item.totalNominalTunggakan;
+    } else {
+      entry.lunasKk += 1;
+    }
+
+    blokAccumulator.set(item.blok, entry);
+  }
+
+  const totalKk = statusIuranList.length;
+  const totalKkLunas = totalKk - totalKkMenunggak;
+  const iuranSummary: KasIuranSummary = {
+    totalKk,
+    totalKkMenunggak,
+    totalKkLunas,
+    persenKepatuhan:
+      totalKk > 0 ? Math.round((totalKkLunas / totalKk) * 100) : 100,
+    totalBulanTunggakan,
+    totalNominalTunggakan,
+    nominalPerBulan: pengaturanIuran.nominalPerBulan,
+    mulaiPeriodeBulan: pengaturanIuran.mulaiPeriodeBulan,
+  };
+
+  const rekapPerBlok: KasBlokRekap[] = Array.from(blokAccumulator.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "id"))
+    .map(([blok, data]) => ({
+      blok,
+      ...data,
+      persenKepatuhan:
+        data.totalKk > 0
+          ? Math.round((data.lunasKk / data.totalKk) * 100)
+          : 100,
+    }));
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8 animate-fade-in">
       {/* Header Halaman */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900">Transparansi Kas RT</h1>
+          <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900">
+            Transparansi Kas RT
+          </h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            Laporan rekapitulasi arus kas masuk dan keluar warga RT 05 yang diperbarui berkala.
+            Laporan arus kas masuk, kas keluar, dan status kepatuhan iuran warga RT 05.
           </p>
         </div>
         <SystemDateTimeBadge />
       </div>
 
-      {/* 1. Banner Saldo Kas Aktif */}
-      <div className="bg-sky-50 border border-sky-200 p-5 sm:p-6 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <span className="text-xs uppercase text-sky-800 font-bold tracking-wider">Saldo Kas Aktif</span>
-          <p className="text-2xl sm:text-4xl font-black text-sky-700 mt-1">{formatRupiah(runningSaldo)}</p>
-          <span className="text-xs text-slate-600 block mt-1">
-            Rekening Kas: <strong className="text-slate-800">Mandiri 123-00-XXXXXXX</strong> (a.n. RT 05)
-          </span>
-        </div>
-        <div className="px-3.5 py-1.5 bg-white border border-sky-200 text-sky-800 rounded-xl text-xs font-semibold shadow-xs">
-          {runningSaldo >= 0 ? "Kondisi Kas: Sehat" : "Kondisi Kas: Defisit"}
-        </div>
-      </div>
-
-      {/* 2. Visualisasi Grafik (Pie Chart & Bar Chart) */}
-      <KasCharts
+      <KasTransparansiClient
+        runningSaldo={runningSaldo}
+        totalMasuk={totalMasuk}
+        totalKeluar={totalKeluar}
         dataBulanan={dataBulanan}
         dataProporsi={dataProporsi}
         tahunAktif={tahunAktif}
+        transaksiTerbaru={transaksiTerbaru}
+        statusIuranList={statusIuranList}
+        iuranSummary={iuranSummary}
+        rekapPerBlok={rekapPerBlok}
+        currentYm={currentYm}
       />
-
-      {/* 3. Komponen Tabel Detail dengan Ikon Kalender & Pencarian */}
-      <KasTableDetail transaksi={transaksiTerbaru} />
     </div>
   );
 }
