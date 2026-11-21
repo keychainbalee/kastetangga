@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { kepalaKeluarga, transaksiKas } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
@@ -6,7 +7,35 @@ import KasCharts from "@/components/KasCharts";
 import KasTableDetail from "@/components/KasTableDetail";
 import SystemDateTimeBadge from "@/components/SystemDateTimeBadge";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
+
+const getCachedKasRows = unstable_cache(
+  async () => {
+    return db
+      .select({
+        id: transaksiKas.id,
+        tanggal: transaksiKas.tanggal,
+        tipe: transaksiKas.tipe,
+        kategori: transaksiKas.kategori,
+        uraian: transaksiKas.uraian,
+        nominal: transaksiKas.nominal,
+        namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
+        namaRumah: kepalaKeluarga.namaRumah,
+        blok: kepalaKeluarga.blok,
+      })
+      .from(transaksiKas)
+      .leftJoin(
+        kepalaKeluarga,
+        eq(transaksiKas.kepalaKeluargaId, kepalaKeluarga.id)
+      )
+      .orderBy(asc(transaksiKas.tanggal), asc(transaksiKas.id));
+  },
+  ["kas-public-transactions"],
+  {
+    tags: ["kas-data"],
+    revalidate: 300,
+  }
+);
 
 const bulanSingkat = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -36,24 +65,7 @@ export default async function KasPage() {
   let dbErrorDetail: string | null = null;
 
   try {
-    rows = await db
-      .select({
-        id: transaksiKas.id,
-        tanggal: transaksiKas.tanggal,
-        tipe: transaksiKas.tipe,
-        kategori: transaksiKas.kategori,
-        uraian: transaksiKas.uraian,
-        nominal: transaksiKas.nominal,
-        namaKepalaKeluarga: kepalaKeluarga.namaKepalaKeluarga,
-        namaRumah: kepalaKeluarga.namaRumah,
-        blok: kepalaKeluarga.blok,
-      })
-      .from(transaksiKas)
-      .leftJoin(
-        kepalaKeluarga,
-        eq(transaksiKas.kepalaKeluargaId, kepalaKeluarga.id)
-      )
-      .orderBy(asc(transaksiKas.tanggal), asc(transaksiKas.id));
+    rows = await getCachedKasRows();
   } catch (err) {
     console.error("Gagal mengambil data transaksi_kas di /kas:", err);
     const cause =

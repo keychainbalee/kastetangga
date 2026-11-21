@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { pembayaranIuran, transaksiKas } from "@/db/schema";
 import { requireAdminApi } from "@/lib/auth";
@@ -74,6 +74,7 @@ export async function POST(request: Request) {
       return insertedTx;
     });
 
+    revalidateTag("kas-data", { expire: 0 });
     revalidatePath("/kas");
     revalidatePath("/admin");
 

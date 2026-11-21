@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { kepalaKeluarga } from "@/db/schema";
@@ -44,6 +44,8 @@ export async function PATCH(
       );
     }
 
+    revalidateTag("kas-data", { expire: 0 });
+    revalidatePath("/kas");
     revalidatePath("/admin");
     return NextResponse.json({ data: updated });
   } catch (err) {
@@ -81,6 +83,8 @@ export async function DELETE(
       );
     }
 
+    revalidateTag("kas-data", { expire: 0 });
+    revalidatePath("/kas");
     revalidatePath("/admin");
     return NextResponse.json({ ok: true });
   } catch (err) {

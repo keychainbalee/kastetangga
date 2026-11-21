@@ -9,6 +9,11 @@ import {
   Search,
   Settings,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   addMonths,
   formatBulanSingkat,
@@ -164,59 +169,56 @@ export default function AdminIuranTab({
   return (
     <div className="space-y-6">
       {/* Pengaturan Tarif & Periode Iuran */}
-      <form
-        onSubmit={handleSubmitPengaturan}
-        className="bg-white border border-sky-100 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3"
-      >
-        <div className="flex items-center gap-2 text-slate-900">
-          <Settings className="w-4 h-4 text-sky-600" />
-          <h2 className="text-sm sm:text-base font-bold">
-            Pengaturan Tarif & Periode Wajib Iuran RT
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-slate-600">
-              Tarif Standar / Bulan (Rp)
-            </label>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={tarifInput}
-              onChange={(e) => setTarifInput(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
-            />
+      <Card className="p-4 sm:p-5">
+        <form onSubmit={handleSubmitPengaturan} className="space-y-3">
+          <div className="flex items-center gap-2 text-slate-900">
+            <Settings className="w-4 h-4 text-sky-600" />
+            <h2 className="text-sm sm:text-base font-bold">
+              Pengaturan Tarif & Periode Wajib Iuran RT
+            </h2>
           </div>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-slate-600">
-              Mulai Periode Iuran RT (Default KK Baru)
-            </label>
-            <input
-              type="month"
-              value={mulaiPeriodeInput}
-              onChange={(e) => setMulaiPeriodeInput(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
-            />
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Tarif Standar / Bulan (Rp)
+              </label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={tarifInput}
+                onChange={(e) => setTarifInput(e.target.value)}
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="sm:col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
-          >
-            {busy ? "Menyimpan..." : "Simpan Pengaturan"}
-          </button>
-        </div>
-      </form>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Mulai Periode Iuran RT (Default KK Baru)
+              </label>
+              <Input
+                type="month"
+                value={mulaiPeriodeInput}
+                onChange={(e) => setMulaiPeriodeInput(e.target.value)}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={busy}
+              className="sm:col-span-2 lg:col-span-1"
+            >
+              {busy ? "Menyimpan..." : "Simpan Pengaturan"}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       {/* Ringkasan Tunggakan */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-red-600 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-1">
+        <Card className="bg-red-600 border-red-600 text-white p-4 sm:p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-red-100">
             <span className="text-xs font-bold uppercase tracking-wider">
               KK Memiliki Tunggakan
@@ -227,9 +229,9 @@ export default function AdminIuranTab({
           <span className="text-xs text-red-100 block">
             S.d. periode {formatBulanSingkat(currentYm)}
           </span>
-        </div>
+        </Card>
 
-        <div className="bg-amber-500 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-1">
+        <Card className="bg-amber-500 border-amber-500 text-white p-4 sm:p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-amber-50">
             <span className="text-xs font-bold uppercase tracking-wider">
               Estimasi Total Tunggakan
@@ -242,9 +244,9 @@ export default function AdminIuranTab({
           <span className="text-xs text-amber-50 block">
             Total {summary.totalBulanTunggakan} bulan belum terbayar
           </span>
-        </div>
+        </Card>
 
-        <div className="bg-emerald-500 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-1 sm:col-span-2 lg:col-span-1">
+        <Card className="bg-emerald-500 border-emerald-500 text-white p-4 sm:p-5 shadow-sm space-y-1 sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between text-emerald-50">
             <span className="text-xs font-bold uppercase tracking-wider">
               KK Lunas / Bayar di Muka
@@ -255,29 +257,29 @@ export default function AdminIuranTab({
           <span className="text-xs text-emerald-50 block">
             Tidak ada tunggakan berjalan
           </span>
-        </div>
+        </Card>
       </div>
 
       {/* Daftar Status & Tunggakan KK */}
-      <div className="bg-white border border-sky-100 rounded-2xl shadow-sm overflow-hidden">
+      <Card className="shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
           <div className="flex flex-col sm:flex-row gap-2.5 flex-1">
             <div className="relative flex-1 max-w-sm">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari nama KK, rumah, atau blok..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:border-sky-500"
+                className="pl-9"
               />
             </div>
 
-            <select
+            <Select
               aria-label="Filter blok tunggakan"
               value={filterBlok}
               onChange={(e) => setFilterBlok(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700"
+              className="w-auto font-semibold text-slate-700 text-xs sm:text-sm"
             >
               <option value="semua">Semua Blok</option>
               {blokOptions.map((blok) => (
@@ -285,10 +287,10 @@ export default function AdminIuranTab({
                   {blok}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 self-start lg:self-auto">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 self-start lg:self-auto gap-0.5">
             {(
               [
                 { key: "semua", label: "Semua" },
@@ -296,18 +298,16 @@ export default function AdminIuranTab({
                 { key: "lunas", label: `Lunas (${summary.totalKkLunas})` },
               ] as const
             ).map((opt) => (
-              <button
+              <Button
                 key={opt.key}
                 type="button"
+                size="xs"
+                variant={filterStatus === opt.key ? "default" : "ghost"}
                 onClick={() => setFilterStatus(opt.key)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                  filterStatus === opt.key
-                    ? "bg-sky-500 text-white"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className="rounded-lg"
               >
                 {opt.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -337,21 +337,22 @@ export default function AdminIuranTab({
                           {formatBulanSingkat(kk.mulaiIuranBulan)})
                         </span>
                       </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${
+                      <Badge
+                        variant={
                           info.status === "menunggak"
-                            ? "bg-red-100 text-red-700"
+                            ? "destructive"
                             : info.status === "bayar_di_muka"
-                              ? "bg-sky-100 text-sky-800"
-                              : "bg-emerald-100 text-emerald-800"
-                        }`}
+                              ? "sky"
+                              : "success"
+                        }
+                        className="whitespace-nowrap"
                       >
                         {info.status === "menunggak"
                           ? `Menunggak ${info.tunggakanBulan.length} Bln`
                           : info.status === "bayar_di_muka"
                             ? `Di Muka (+${info.bulanDiMuka.length} Bln)`
                             : "Lunas"}
-                      </span>
+                      </Badge>
                     </div>
 
                     {info.tunggakanBulan.length > 0 && (
@@ -386,16 +387,18 @@ export default function AdminIuranTab({
                     )}
 
                     <div className="flex justify-end pt-1">
-                      <button
+                      <Button
                         type="button"
+                        variant="success"
+                        size="xs"
                         onClick={() => onBayarCepat(kk, defaultMonths)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        className="rounded-xl px-3.5"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
                         {info.tunggakanBulan.length > 0
                           ? "Bayar Tunggakan"
                           : "Bayar di Muka"}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );
@@ -439,21 +442,22 @@ export default function AdminIuranTab({
                           </span>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          <Badge
+                            variant={
                               info.status === "menunggak"
-                                ? "bg-red-100 text-red-700"
+                                ? "destructive"
                                 : info.status === "bayar_di_muka"
-                                  ? "bg-sky-100 text-sky-800"
-                                  : "bg-emerald-100 text-emerald-800"
-                            }`}
+                                  ? "sky"
+                                  : "success"
+                            }
+                            className="py-1 text-xs"
                           >
                             {info.status === "menunggak"
                               ? `Menunggak ${info.tunggakanBulan.length} Bulan`
                               : info.status === "bayar_di_muka"
                                 ? `Bayar di Muka (+${info.bulanDiMuka.length} Bln)`
                                 : "Lunas"}
-                          </span>
+                          </Badge>
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex flex-wrap gap-1">
@@ -491,16 +495,18 @@ export default function AdminIuranTab({
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <button
+                          <Button
                             type="button"
+                            variant="success"
+                            size="xs"
                             onClick={() => onBayarCepat(kk, defaultMonths)}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                            className="rounded-xl px-3"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
                             {info.tunggakanBulan.length > 0
                               ? "Bayar Iuran"
                               : "Bayar di Muka"}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -510,7 +516,7 @@ export default function AdminIuranTab({
             </div>
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

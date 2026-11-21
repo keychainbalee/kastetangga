@@ -35,7 +35,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = createSessionToken(user.id);
+    const token = createSessionToken({
+      userId: user.id,
+      username: user.username,
+      nama: user.nama,
+      role: user.role,
+    });
     const response = NextResponse.json({
       user: {
         id: user.id,

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function HeroSection() {
   return (
-    <section className="py-16 sm:py-24 px-4 border-b border-sky-100">
+    <section className="py-12 sm:py-20 px-4 border-b border-sky-100">
       <div className="max-w-4xl mx-auto text-center space-y-4">
         <span className="inline-block px-4 py-1.5 bg-white border border-sky-200 text-sky-700 text-xs font-bold rounded-full uppercase tracking-wider shadow-xs">
           Portal Informasi Resmi Warga

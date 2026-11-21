@@ -46,19 +46,21 @@ export default function GaleriSection() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {galeriKegiatan.map((item) => (
           <div
             key={item.id}
-            className="bg-white rounded-2xl border border-sky-100 overflow-hidden shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
+            className="bg-white rounded-2xl border border-sky-100 overflow-hidden shadow-xs hover:border-sky-300 transition-colors group"
           >
-            <div className="relative h-48 w-full overflow-hidden bg-slate-100">
+            <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-slate-100">
               <img
                 src={item.gambar}
                 alt={item.judul}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover"
               />
-              <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/90 backdrop-blur text-[11px] font-bold text-sky-700 rounded-lg shadow-xs">
+              <span className="absolute top-3 left-3 px-2.5 py-1 bg-white border border-sky-100 text-[11px] font-bold text-sky-700 rounded-lg shadow-xs">
                 {item.kategori}
               </span>
             </div>

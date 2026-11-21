@@ -17,6 +17,9 @@ export interface SessionUser {
 
 interface SessionTokenPayload {
   userId: number;
+  username?: string;
+  nama?: string;
+  role?: UserRole;
   exp: number;
 }
 
@@ -35,11 +38,14 @@ function signPayload(encodedPayload: string): string {
 }
 
 /**
- * Membuat token sesi bertanda tangan HMAC-SHA256.
+ * Membuat token sesi bertanda tangan HMAC-SHA256 beserta klaim pengguna ringan.
  */
-export function createSessionToken(userId: number): string {
+export function createSessionToken(user: SessionUser): string {
   const payload: SessionTokenPayload = {
-    userId,
+    userId: user.userId,
+    username: user.username,
+    nama: user.nama,
+    role: user.role,
     exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -81,6 +87,33 @@ export function verifySessionToken(token: string): SessionTokenPayload | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Mengambil sesi pengguna langsung dari tanda tangan cookie tanpa query database (untuk UI Navbar).
+ */
+export async function getSessionFromCookieOnly(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return null;
+
+  const verified = verifySessionToken(token);
+  if (!verified) return null;
+
+  if (
+    verified.username &&
+    verified.nama &&
+    (verified.role === "admin" || verified.role === "user")
+  ) {
+    return {
+      userId: verified.userId,
+      username: verified.username,
+      nama: verified.nama,
+      role: verified.role,
+    };
+  }
+
+  return getSession();
 }
 
 /**

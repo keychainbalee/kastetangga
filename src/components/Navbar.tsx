@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,24 +14,38 @@ interface NavbarUser {
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [sessionUser, setSessionUser] = useState<NavbarUser | null>(null);
+  const hasFetchedRef = useRef(false);
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith("/admin");
 
   useEffect(() => {
-    if (pathname.startsWith("/admin")) return;
     let active = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : { user: null }))
-      .then((data: { user?: NavbarUser | null }) => {
-        if (active) setSessionUser(data.user ?? null);
-      })
-      .catch(() => {
-        if (active) setSessionUser(null);
-      });
+
+    const loadAuthStatus = () => {
+      fetch("/api/auth/me", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : { user: null }))
+        .then((data: { user?: NavbarUser | null }) => {
+          if (active) {
+            hasFetchedRef.current = true;
+            setSessionUser(data.user ?? null);
+          }
+        })
+        .catch(() => {
+          if (active) setSessionUser(null);
+        });
+    };
+
+    if (!isAdminRoute && !hasFetchedRef.current) {
+      loadAuthStatus();
+    }
+
+    window.addEventListener("wargakas-auth-changed", loadAuthStatus);
+
     return () => {
       active = false;
+      window.removeEventListener("wargakas-auth-changed", loadAuthStatus);
     };
-  }, [pathname]);
+  }, [isAdminRoute]);
 
   if (isAdminRoute) {
     return null;

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export interface TransaksiItem {
   id: number;
@@ -107,7 +110,7 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
   };
 
   return (
-    <div className="bg-white p-5 sm:p-6 rounded-2xl border border-sky-100 shadow-xs space-y-5 animate-fade-in">
+    <Card className="p-5 sm:p-6 space-y-5 animate-fade-in">
       {/* Header Komponen */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-sky-100">
         <div>
@@ -303,12 +306,12 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
-            <input
+            <Input
               type="text"
               placeholder="Contoh: Sampah, Iuran, Blok A..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-sky-200 bg-sky-50/50 text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-sky-400 placeholder:text-slate-400"
+              className="pl-9 h-9 border-sky-200 bg-sky-50/50 text-xs"
             />
           </div>
         </div>
@@ -316,30 +319,39 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
 
       {/* Tab Filter Tipe: Semua / Pemasukan / Pengeluaran */}
       <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-        <button
+        <Button
+          type="button"
+          size="xs"
+          variant={filterTipe === "semua" ? "default" : "ghost"}
           onClick={() => setFilterTipe("semua")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            filterTipe === "semua" ? "bg-sky-500 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          className={`rounded-lg px-3.5 ${
+            filterTipe !== "semua" ? "bg-slate-100 text-slate-600 hover:bg-slate-200" : ""
           }`}
         >
           Semua Data ({transaksiFiltered.length})
-        </button>
-        <button
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          variant={filterTipe === "masuk" ? "default" : "ghost"}
           onClick={() => setFilterTipe("masuk")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            filterTipe === "masuk" ? "bg-sky-500 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          className={`rounded-lg px-3.5 ${
+            filterTipe !== "masuk" ? "bg-slate-100 text-slate-600 hover:bg-slate-200" : ""
           }`}
         >
           Pemasukan Saja
-        </button>
-        <button
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          variant={filterTipe === "keluar" ? "default" : "ghost"}
           onClick={() => setFilterTipe("keluar")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            filterTipe === "keluar" ? "bg-sky-500 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          className={`rounded-lg px-3.5 ${
+            filterTipe !== "keluar" ? "bg-slate-100 text-slate-600 hover:bg-slate-200" : ""
           }`}
         >
           Pengeluaran Saja
-        </button>
+        </Button>
       </div>
 
       {/* DATA KAS: Kondisi Kosong / Tampil */}
@@ -441,6 +453,6 @@ export default function KasTableDetail({ transaksi }: { transaksi: TransaksiItem
           </div>
         </>
       )}
-    </div>
+    </Card>
   );
 }
